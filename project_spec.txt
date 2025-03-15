@@ -1,0 +1,35 @@
+Create a software release management tool that meets the following requirements (in Rust). 
+
+=== GENERAL SPECIFICATIONS ===
+1. Compiles to a single binary file, I want the backend to embed the frontend code into it, serving the static files. I also want it to act as the API. Deployment should consist of copying a single binary to the deployment server.
+2. SSO login flow through GitHub.
+3. Front-end should be developed in Rust and built to WASM. 
+4. Use Sled for transient storage, store scheduled releases and their current state, persisting across app start-ups.
+5. Stream live updates from back-end release operations to the front-end via WebSockets. Data in here would include information about ongoing release items, errors, failures, and STDOUT and STDERR from the release processes
+6. Chat function built in, so all current users of the tool can have a general chat room.
+
+=== API SPECIFICATIONS ===
+1. create, update, delete endpoints that let you modify the state of a Release
+2. login flow via GitHub with redirect and callback URL
+3. stores user sessions and WebSocket connections. Periodically prunes stale websocket connections
+4. Checks every minute for queued releases that have elapsed their scheduled start datetime.
+5. When releases scheduled starts have elapsed, it runs the associated deployment items.
+6. Deployment items at this time are "data", "solr", and "app". For development purposes they can just be an echo statement and a sleep.
+7. Stream STDOUT and STDERR line-by-line to the frontend (broadcast to all active clients), as well as status messages/changes for each release.
+8. endpoint that supplies a list of known clients
+9. Users should not be able to create concurrent releases for the same client.
+10. Notificiation mechanism, Teams, Email, etc. To be fleshed out later.
+
+=== FRONT END SPECIFICATIONS ===
+1. WASM binary
+2. Kanban style board that takes up entire screen, with three Environments, Development, Staging, and Production.
+3. Releases are "cards" that move between the Environments. Drag and drop functionality would be nice to have (not required).
+4. Release status (percentage complete, current status, errors etc.) displayed at a glance on release cards.
+5. Release details menu where user can see pertinent details for each release, as well as view detailed log output for deployment items.
+6. Users need to be able to "clear" or delete releases in the front-end menu, clearing marks them as good to move to the next environment.
+7. Users should be able to update scheduled move time when clearing a release in "staging", they might clear the release in staging during the day and then schedule it for production after hours, or on a different day.
+8. Users should have a general chat room with each other within the tool, broadcast to all other clients, with their usernames.
+9. Users should be able to create a new release via a form, it takes the following information, (title, client - select populated from client endpoint, current environment, final target environment, deployment items (data, solr, app) - these could be toggles or checkmarks.
+10. Users should have the option to "skip staging" and deploy from "Development to Production". Releases can take the following paths, Development -> Staging -> Production, Development -> Production, Development -> Staging, Staging -> Production.
+
+
