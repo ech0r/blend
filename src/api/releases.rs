@@ -1,5 +1,5 @@
 use actix_web::{web, HttpResponse, Responder, get, post, put, delete};
-use crate::models::{Release, Environment, ReleaseStatus};
+use crate::models::{Release, Environment, ReleaseStatus, DeploymentItem};
 use crate::storage::SledStorage;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -14,6 +14,8 @@ pub struct CreateReleaseRequest {
     pub target_environment: String,
     pub deployment_items: Vec<String>,
     pub scheduled_at: DateTime<Utc>,
+    #[serde(default)]
+    pub skip_staging: bool, // Added skip_staging field
 }
 
 #[derive(Debug, Serialize)]
@@ -37,12 +39,16 @@ fn parse_environment(env_str: &str) -> Result<Environment, String> {
 async fn check_client_release_exists(
     db: &SledStorage,
     client_id: &str,
-) -> Result<bool, Box<dyn std::error::Error>> {
+) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
     let releases = db.get_all_releases()?;
     
     Ok(releases.iter().any(|r| {
         r.client_id == client_id 
-        && (r.status == ReleaseStatus::Pending || r.status == ReleaseStatus::InProgress)
+        && (r.status == ReleaseStatus::InDevelopment || 
+            r.status == ReleaseStatus::DeployingToStaging || 
+            r.status == ReleaseStatus::ReadyToTestInStaging || 
+            r.status == ReleaseStatus::DeployingToProduction || 
+            r.status == ReleaseStatus::ReadyToTestInProduction)
     }))
 }
 
@@ -112,16 +118,21 @@ async fn create_release(
     };
 
     // Check valid deployment path
-    match (&current_env, &target_env) {
-        (Environment::Development, Environment::Staging) => {}
-        (Environment::Development, Environment::Production) => {}
-        (Environment::Staging, Environment::Production) => {}
+    match (&current_env, &target_env, release_data.skip_staging) {
+        // Allow direct path if skip_staging is true
+        (Environment::Development, Environment::Production, true) => {}
+        // Standard paths
+        (Environment::Development, Environment::Staging, _) => {}
+        (Environment::Development, Environment::Production, false) => {}
+        (Environment::Staging, Environment::Production, _) => {}
         _ => {
             return HttpResponse::BadRequest().json(ReleaseResponse {
                 success: false,
                 message: Some(format!(
-                    "Invalid deployment path: {:?} to {:?}",
-                    current_env, target_env
+                    "Invalid deployment path: {:?} to {:?}{}",
+                    current_env, 
+                    target_env,
+                    if release_data.skip_staging { " (skip staging)" } else { "" }
                 )),
                 data: None,
             });
@@ -160,6 +171,7 @@ async fn create_release(
         release_data.deployment_items.clone(),
         release_data.scheduled_at,
         "unknown".to_string(), // TODO: Get from authenticated user
+        release_data.skip_staging, // Pass the skip_staging flag
     );
 
     // Save to storage
@@ -239,30 +251,23 @@ async fn update_release(
         id: release_id,
         title: release_data.title.clone(),
         client_id: release_data.client_id.clone(),
-        current_environment: current_env, // Note: we should update current_environment, not just target
+        current_environment: current_env,
         target_environment: target_env,
         scheduled_at: release_data.scheduled_at,
         // Keep original values for these fields
         created_at: existing_release.created_at,
         created_by: existing_release.created_by,
-        status: ReleaseStatus::Pending, // Reset status to Pending for the new environment
-        progress: 0.0, // Reset progress
+        status: existing_release.status, // Keep the current status
+        progress: existing_release.progress, // Keep the current progress
+        skip_staging: release_data.skip_staging, // Update the skip_staging flag
         // Update deployment items if provided, otherwise keep original
         deployment_items: if release_data.deployment_items.is_empty() {
-            existing_release.deployment_items.iter().map(|item| {
-                // Reset status for each item
-                DeploymentItem {
-                    name: item.name.clone(),
-                    status: ReleaseStatus::Pending,
-                    logs: Vec::new(), // Clear logs for new environment
-                    error: None,
-                }
-            }).collect()
+            existing_release.deployment_items
         } else {
             release_data.deployment_items.iter().map(|name| {
                 DeploymentItem {
                     name: name.clone(),
-                    status: ReleaseStatus::Pending,
+                    status: ReleaseStatus::InDevelopment, // Reset status for new items
                     logs: Vec::new(),
                     error: None,
                 }
@@ -336,10 +341,107 @@ async fn delete_release(db: web::Data<SledStorage>, path: web::Path<Uuid>) -> im
     }
 }
 
+// Add this endpoint to update release status
+#[put("/{id}/status")]
+async fn update_release_status(
+    db: web::Data<SledStorage>,
+    path: web::Path<Uuid>,
+    status_update: web::Json<serde_json::Value>,
+) -> impl Responder {
+    let release_id = path.into_inner();
+    
+    // Get the release
+    let mut release = match db.get_release(&release_id) {
+        Ok(Some(release)) => release,
+        Ok(None) => {
+            return HttpResponse::NotFound().json(ReleaseResponse {
+                success: false,
+                message: Some(format!("Release with ID {} not found", release_id)),
+                data: None,
+            });
+        }
+        Err(e) => {
+            error!("Failed to get release {}: {}", release_id, e);
+            return HttpResponse::InternalServerError().json(ReleaseResponse {
+                success: false,
+                message: Some(format!("Failed to get release: {}", e)),
+                data: None,
+            });
+        }
+    };
+    
+    // Get the new status
+    let status_str = match status_update.get("status") {
+        Some(serde_json::Value::String(s)) => s.as_str(),
+        _ => {
+            return HttpResponse::BadRequest().json(ReleaseResponse {
+                success: false,
+                message: Some("Invalid or missing status in request".to_string()),
+                data: None,
+            });
+        }
+    };
+    
+    // Get the next status based on current and skip_staging flag
+    if status_str == "clear" {
+        if let Some(next_status) = release.next_status_when_cleared() {
+            release.status = next_status;
+        } else {
+            return HttpResponse::BadRequest().json(ReleaseResponse {
+                success: false,
+                message: Some("Release cannot be cleared in its current state".to_string()),
+                data: None,
+            });
+        }
+    } else {
+        // For direct status updates (less common)
+        release.status = match status_str {
+            "InDevelopment" => ReleaseStatus::InDevelopment,
+            "ClearedInDevelopment" => ReleaseStatus::ClearedInDevelopment,
+            "DeployingToStaging" => ReleaseStatus::DeployingToStaging,
+            "ReadyToTestInStaging" => ReleaseStatus::ReadyToTestInStaging,
+            "ClearedInStaging" => ReleaseStatus::ClearedInStaging,
+            "DeployingToProduction" => ReleaseStatus::DeployingToProduction,
+            "ReadyToTestInProduction" => ReleaseStatus::ReadyToTestInProduction,
+            "ClearedInProduction" => ReleaseStatus::ClearedInProduction,
+            "Error" => ReleaseStatus::Error,
+            "Blocked" => ReleaseStatus::Blocked,
+            _ => {
+                return HttpResponse::BadRequest().json(ReleaseResponse {
+                    success: false,
+                    message: Some(format!("Invalid status: {}", status_str)),
+                    data: None,
+                });
+            }
+        };
+    }
+    
+    // Save the updated release
+    match db.save_release(&release) {
+        Ok(_) => {
+            info!("Updated release status: {} to {:?}", release_id, release.status);
+            HttpResponse::Ok().json(ReleaseResponse {
+                success: true,
+                message: Some(format!("Release status updated successfully")),
+                data: Some(release),
+            })
+        }
+        Err(e) => {
+            error!("Failed to update release status {}: {}", release_id, e);
+            HttpResponse::InternalServerError().json(ReleaseResponse {
+                success: false,
+                message: Some(format!("Failed to update release status: {}", e)),
+                data: None,
+            })
+        }
+    }
+}
+
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(get_releases)
         .service(get_release)
         .service(create_release)
         .service(update_release)
-        .service(delete_release);
+        .service(delete_release)
+        .service(update_release_status);
 }

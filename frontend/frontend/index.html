@@ -276,7 +276,123 @@
             cursor: pointer;
             font-weight: bold;
             margin-left: 1rem;
-        }
+	}
+
+	/* Status Colors */
+	.status-in-development {
+		color: #3498db; /* Blue */
+	}
+
+	.status-cleared {
+		color: #27ae60; /* Green */
+	}
+
+	.status-deploying {
+		color: #f39c12; /* Orange */
+	}
+
+	.status-ready {
+		color: #16a085; /* Teal */
+	}
+
+	.status-completed {
+		color: #2ecc71; /* Bright Green */
+	}
+
+	.status-error {
+		color: #e74c3c; /* Red */
+	}
+
+	.status-blocked {
+		color: #7f8c8d; /* Gray */
+	}
+
+	/* Card status badges */
+	.release-card .release-status span {
+		display: inline-block;
+		padding: 0.25rem 0.5rem;
+		border-radius: 0.25rem;
+		font-size: 0.8rem;
+		font-weight: bold;
+	}
+
+	/* Card border colors based on status */
+	.release-card.status-in-development {
+		border-left: 4px solid #3498db;
+	}
+
+	.release-card.status-cleared {
+		border-left: 4px solid #27ae60;
+	}
+
+	.release-card.status-deploying {
+		border-left: 4px solid #f39c12;
+	}
+
+	.release-card.status-ready {
+		border-left: 4px solid #16a085;
+	}
+
+	.release-card.status-completed {
+		border-left: 4px solid #2ecc71;
+	}
+
+	.release-card.status-error {
+		border-left: 4px solid #e74c3c;
+	}
+
+	.release-card.status-blocked {
+		border-left: 4px solid #7f8c8d;
+	}
+
+	/* Button styling */
+	.release-card .clear-btn {
+		background-color: #27ae60;
+		color: white;
+		border: none;
+		padding: 0.25rem 0.5rem;
+		border-radius: 0.25rem;
+		cursor: pointer;
+		font-weight: bold;
+	}
+
+	.release-card .clear-btn:hover {
+		background-color: #2ecc71;
+	}
+
+	/* Pipeline info section */
+	.pipeline-info {
+		margin-top: 1rem;
+		padding: 0.5rem;
+		background-color: #f8f9fa;
+		border-radius: 0.25rem;
+	}
+
+	/* Deployment-specific styles */
+	.deployment-item.status-deploying {
+		background-color: rgba(243, 156, 18, 0.1);
+	}
+
+	.deployment-item.status-error {
+		background-color: rgba(231, 76, 60, 0.1);
+	}
+
+	.deployment-item.status-completed {
+		background-color: rgba(46, 204, 113, 0.1);
+	}
+
+	/* Skip staging checkbox section */
+	.form-group .checkbox-label {
+		display: block;
+		margin-bottom: 0.5rem;
+		font-weight: 500;
+	}
+
+	.form-group .help-text {
+		font-size: 0.85rem;
+		color: #7f8c8d;
+		margin-top: 0.25rem;
+	}
     </style>
 </head>
 <body>

@@ -1,42 +1,4 @@
-// Function to broadcast release updates to all connected clients
-pub fn broadcast_release_update(release_id: String, status: String, progress: f32, log_line: Option<String>) {
-    // Create update message
-    let update = WsMessage::ReleaseUpdate {
-        release_id: release_id.clone(),
-        status,
-        progress,
-        log_line,
-    };
-    
-    // Convert to JSON
-    if let Ok(json) = serde_json::to_string(&update) {
-        info!("Broadcasting release update: {}", json);
-        
-        // Send to all active sessions
-        if let Ok(sessions) = ACTIVE_SESSIONS.lock() {
-            let client_count = sessions.len();
-            if client_count == 0 {
-                return;
-            }
-            
-            let mut broadcast_count = 0;
-            for (_, addr) in sessions.iter() {
-                // Send the message
-                let msg = BroadcastMessage {
-                    content: json.clone(),
-                    sender_id: "system".to_string(), // System-generated message
-                };
-                
-                addr.do_send(msg);
-                broadcast_count += 1;
-            }
-            
-            info!("Release update broadcast to {} clients", broadcast_count);
-        }
-    } else {
-        error!("Failed to serialize release update");
-    }
-}use actix_web_actors::ws;
+use actix_web_actors::ws;
 use serde::{Serialize, Deserialize};
 use std::time::{Duration, Instant};
 use log::{info, warn, error, debug};
@@ -305,5 +267,48 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebSocketSession 
                 ctx.stop();
             }
         }
+    }
+}
+
+// Function to broadcast release updates to all connected clients
+pub fn broadcast_release_update(release_id: String, status: String, progress: f32, log_line: Option<String>) {
+    use log::{info, error};
+    // Use the local WsMessage, not from models
+    
+    // Create update message
+    let update = WsMessage::ReleaseUpdate {
+        release_id: release_id.clone(),
+        status,
+        progress,
+        log_line,
+    };
+    
+    // Convert to JSON
+    if let Ok(json) = serde_json::to_string(&update) {
+        info!("Broadcasting release update: {}", json);
+        
+        // Send to all active sessions
+        if let Ok(sessions) = ACTIVE_SESSIONS.lock() {
+            let client_count = sessions.len();
+            if client_count == 0 {
+                return;
+            }
+            
+            let mut broadcast_count = 0;
+            for (_, addr) in sessions.iter() {
+                // Send the message
+                let msg = BroadcastMessage {
+                    content: json.clone(),
+                    sender_id: "system".to_string(), // System-generated message
+                };
+                
+                addr.do_send(msg);
+                broadcast_count += 1;
+            }
+            
+            info!("Release update broadcast to {} clients", broadcast_count);
+        }
+    } else {
+        error!("Failed to serialize release update");
     }
 }

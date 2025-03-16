@@ -1,4 +1,4 @@
-mod server;
+pub mod server;
 
 use actix_web::{web, Error, HttpRequest, HttpResponse};
 use actix_web_actors::ws;

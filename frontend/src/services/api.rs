@@ -1,7 +1,7 @@
 use gloo_net::http::Request;
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
-use crate::models::{Release, Client, User, Environment};
+use crate::models::{Release, Client, User, Environment, ReleaseStatus};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::JsValue;
@@ -27,6 +27,7 @@ pub struct CreateReleaseRequest {
     pub target_environment: String,
     pub deployment_items: Vec<String>,
     pub scheduled_at: DateTime<Utc>,
+    pub skip_staging: bool, // Added skip_staging field
 }
 
 // Generic API error
@@ -102,6 +103,7 @@ impl ApiClient {
         target_environment: Environment,
         deployment_items: Vec<String>,
         scheduled_at: DateTime<Utc>,
+        skip_staging: bool, // Added skip_staging parameter
     ) -> Result<Release, ApiError> {
         let url = format!("{}/releases", API_URL);
         
@@ -112,6 +114,7 @@ impl ApiClient {
             target_environment: format!("{:?}", target_environment),
             deployment_items,
             scheduled_at,
+            skip_staging, // Include skip_staging in request
         };
         
         let response = Request::post(&url)
@@ -141,6 +144,7 @@ impl ApiClient {
         target_environment: Environment,
         deployment_items: Vec<String>,
         scheduled_at: DateTime<Utc>,
+        skip_staging: bool, // Added skip_staging parameter
     ) -> Result<Release, ApiError> {
         let url = format!("{}/releases/{}", API_URL, id);
         
@@ -151,6 +155,7 @@ impl ApiClient {
             target_environment: format!("{:?}", target_environment),
             deployment_items,
             scheduled_at,
+            skip_staging, // Include skip_staging in request
         };
         
         let response = Request::put(&url)

@@ -23,7 +23,7 @@ async fn get_users(db: web::Data<SledStorage>) -> impl Responder {
 }
 
 #[get("/me")]
-async fn get_current_user(db: web::Data<SledStorage>) -> impl Responder {
+async fn get_current_user(_db: web::Data<SledStorage>) -> impl Responder {
     // In a real implementation, we would get the user ID from the session
     // and then fetch the user from the database
     HttpResponse::Ok().body("Current user info")

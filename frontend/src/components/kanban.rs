@@ -1,14 +1,13 @@
 use yew::prelude::*;
 use web_sys::{DragEvent, DataTransfer};
-use crate::models::{Release, Environment};
+use crate::models::{Release, Environment, ReleaseStatus};
 use super::release_card::ReleaseCard;
 
 #[derive(Properties, PartialEq)]
 pub struct KanbanBoardProps {
-    pub dev_releases: Vec<Release>,
-    pub staging_releases: Vec<Release>,
-    pub prod_releases: Vec<Release>,
+    pub releases: Vec<Release>, // All releases, not separated by environment
     pub on_move_release: Callback<(String, Environment)>,
+    pub on_clear_release: Callback<String>, // Add a callback specifically for clearing
     pub on_delete_release: Callback<String>,
 }
 
@@ -25,6 +24,13 @@ pub fn kanban_board(props: &KanbanBoardProps) -> Html {
         let callback = props.on_move_release.clone();
         Callback::from(move |(id, env): (String, Environment)| {
             callback.emit((id, env));
+        })
+    };
+    
+    let on_clear = {
+        let callback = props.on_clear_release.clone();
+        Callback::from(move |id: String| {
+            callback.emit(id);
         })
     };
     
@@ -68,6 +74,22 @@ pub fn kanban_board(props: &KanbanBoardProps) -> Html {
         })
     };
     
+    // Filter releases by their board column (determined by status)
+    let dev_releases = props.releases.iter()
+        .filter(|r| r.current_board_column() == Environment::Development)
+        .cloned()
+        .collect::<Vec<_>>();
+        
+    let staging_releases = props.releases.iter()
+        .filter(|r| r.current_board_column() == Environment::Staging)
+        .cloned()
+        .collect::<Vec<_>>();
+        
+    let prod_releases = props.releases.iter()
+        .filter(|r| r.current_board_column() == Environment::Production)
+        .cloned()
+        .collect::<Vec<_>>();
+    
     html! {
         <div class="kanban-board">
             <div 
@@ -77,17 +99,18 @@ pub fn kanban_board(props: &KanbanBoardProps) -> Html {
             >
                 <div class="environment-header">
                     <h2>{ "Development" }</h2>
-                    <span class="count">{ props.dev_releases.len() }</span>
+                    <span class="count">{ dev_releases.len() }</span>
                 </div>
                 
                 <div class="column-content">
                     {
-                        props.dev_releases.iter().map(|release| {
+                        dev_releases.iter().map(|release| {
                             html! {
                                 <ReleaseCard 
                                     release={release.clone()}
                                     on_delete={on_delete.clone()}
                                     on_move={on_move.clone()}
+                                    on_clear={on_clear.clone()}
                                 />
                             }
                         }).collect::<Html>()
@@ -102,17 +125,18 @@ pub fn kanban_board(props: &KanbanBoardProps) -> Html {
             >
                 <div class="environment-header">
                     <h2>{ "Staging" }</h2>
-                    <span class="count">{ props.staging_releases.len() }</span>
+                    <span class="count">{ staging_releases.len() }</span>
                 </div>
                 
                 <div class="column-content">
                     {
-                        props.staging_releases.iter().map(|release| {
+                        staging_releases.iter().map(|release| {
                             html! {
                                 <ReleaseCard 
                                     release={release.clone()}
                                     on_delete={on_delete.clone()}
                                     on_move={on_move.clone()}
+                                    on_clear={on_clear.clone()}
                                 />
                             }
                         }).collect::<Html>()
@@ -127,17 +151,18 @@ pub fn kanban_board(props: &KanbanBoardProps) -> Html {
             >
                 <div class="environment-header">
                     <h2>{ "Production" }</h2>
-                    <span class="count">{ props.prod_releases.len() }</span>
+                    <span class="count">{ prod_releases.len() }</span>
                 </div>
                 
                 <div class="column-content">
                     {
-                        props.prod_releases.iter().map(|release| {
+                        prod_releases.iter().map(|release| {
                             html! {
                                 <ReleaseCard 
                                     release={release.clone()}
                                     on_delete={on_delete.clone()}
                                     on_move={on_move.clone()}
+                                    on_clear={on_clear.clone()}
                                 />
                             }
                         }).collect::<Html>()

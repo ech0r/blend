@@ -2,7 +2,7 @@ mod sled_storage;
 
 pub use sled_storage::SledStorage;
 
-pub fn init() -> Result<SledStorage, Box<dyn std::error::Error>> {
+pub fn init() -> Result<SledStorage, Box<dyn std::error::Error + Send + Sync>> {
     let storage = SledStorage::new()?;
     
     // Initialize with default clients
@@ -12,7 +12,7 @@ pub fn init() -> Result<SledStorage, Box<dyn std::error::Error>> {
 }
 
 // Create some default clients for the application
-fn create_default_clients(storage: &SledStorage) -> Result<(), Box<dyn std::error::Error>> {
+fn create_default_clients(storage: &SledStorage) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use crate::models::Client;
     use uuid::Uuid;
     

@@ -20,6 +20,7 @@ pub enum AppMsg {
     DeleteRelease(String),
     ReleaseDeleted(String),
     MoveRelease(String, Environment),
+    ClearRelease(String), // New message for clearing a release
     OpenReleaseForm,
     CloseReleaseForm,
     CreateRelease(Release),
@@ -150,11 +151,43 @@ impl Component for App {
                             target_env,
                             release.deployment_items.into_iter().map(|i| i.name).collect(),
                             release.scheduled_at,
+                            release.skip_staging, // Include the skip_staging flag
                         ).await {
                             Ok(updated) => link.send_message(AppMsg::ReleaseUpdated(updated)),
                             Err(e) => link.send_message(AppMsg::Error(format!("Failed to update release: {}", e))),
                         }
                     });
+                }
+                
+                false
+            }
+            AppMsg::ClearRelease(release_id) => {
+                // Find the release
+                if let Some(release) = self.releases.iter().find(|r| r.id == release_id) {
+                    let mut release = release.clone();
+                    
+                    // Determine next status based on current status and skip_staging flag
+                    if let Some(next_status) = release.next_status() {
+                        release.status = next_status;
+                        
+                        // Update the release through API
+                        let link = ctx.link().clone();
+                        spawn_local(async move {
+                            match ApiClient::update_release(
+                                &release.id,
+                                release.title,
+                                release.client_id,
+                                release.current_environment,
+                                release.target_environment,
+                                release.deployment_items.into_iter().map(|i| i.name).collect(),
+                                release.scheduled_at,
+                                release.skip_staging,
+                            ).await {
+                                Ok(updated) => link.send_message(AppMsg::ReleaseUpdated(updated)),
+                                Err(e) => link.send_message(AppMsg::Error(format!("Failed to clear release: {}", e))),
+                            }
+                        });
+                    }
                 }
                 
                 false
@@ -178,6 +211,7 @@ impl Component for App {
                         release.target_environment,
                         release.deployment_items.into_iter().map(|i| i.name).collect(),
                         release.scheduled_at,
+                        release.skip_staging, // Include the skip_staging flag
                     ).await {
                         Ok(created) => link.send_message(AppMsg::ReleaseCreated(created)),
                         Err(e) => link.send_message(AppMsg::Error(format!("Failed to create release: {}", e))),
@@ -228,15 +262,6 @@ impl Component for App {
                             WsMessage::ReleaseUpdate { release_id, status, progress, log_line } => {
                                 // Find and update release
                                 if let Some(release) = self.releases.iter_mut().find(|r| r.id == *release_id) {
-                                    // Update status
-                                    release.status = match status.as_str() {
-                                        "Pending" => ReleaseStatus::Pending,
-                                        "InProgress" => ReleaseStatus::InProgress,
-                                        "Completed" => ReleaseStatus::Completed,
-                                        "Failed" => ReleaseStatus::Failed,
-                                        _ => release.status.clone(),
-                                    };
-                                    
                                     // Update progress
                                     release.progress = *progress;
                                     
@@ -260,7 +285,7 @@ impl Component for App {
                                                     } else {
                                                         // If we can't find a specific item, add to all in-progress items
                                                         for item in release.deployment_items.iter_mut()
-                                                            .filter(|i| i.status == ReleaseStatus::InProgress) {
+                                                            .filter(|i| matches!(i.status, ReleaseStatus::DeployingToStaging | ReleaseStatus::DeployingToProduction)) {
                                                             item.logs.push(log_line.clone());
                                                         }
                                                     }
@@ -339,22 +364,7 @@ impl Component for App {
         }
     }
     
-    fn view(&self, ctx: &Context<Self>) -> Html {
-        let dev_releases = self.releases.iter()
-            .filter(|r| r.current_environment == Environment::Development)
-            .cloned()
-            .collect::<Vec<_>>();
-            
-        let staging_releases = self.releases.iter()
-            .filter(|r| r.current_environment == Environment::Staging)
-            .cloned()
-            .collect::<Vec<_>>();
-            
-        let prod_releases = self.releases.iter()
-            .filter(|r| r.current_environment == Environment::Production)
-            .cloned()
-            .collect::<Vec<_>>();
-        
+    fn view(&self, ctx: &Context<Self>) -> Html {        
         let is_connected = self.ws_service.as_ref().map(|ws| ws.is_connected()).unwrap_or(false);
         
         html! {
@@ -368,10 +378,9 @@ impl Component for App {
                 
                 <main class="main-content">
                     <KanbanBoard 
-                        dev_releases={dev_releases}
-                        staging_releases={staging_releases}
-                        prod_releases={prod_releases}
+                        releases={self.releases.clone()} // Pass all releases, not splitting by environment
                         on_move_release={ctx.link().callback(|(id, env)| AppMsg::MoveRelease(id, env))}
+                        on_clear_release={ctx.link().callback(AppMsg::ClearRelease)} // Add clear callback
                         on_delete_release={ctx.link().callback(AppMsg::DeleteRelease)}
                     />
                     

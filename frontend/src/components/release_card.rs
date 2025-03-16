@@ -8,6 +8,7 @@ pub struct ReleaseCardProps {
     pub release: Release,
     pub on_delete: Callback<String>,
     pub on_move: Callback<(String, Environment)>,
+    pub on_clear: Callback<String>, // New clear callback
 }
 
 #[function_component(ReleaseCard)]
@@ -41,28 +42,19 @@ pub fn release_card(props: &ReleaseCardProps) -> Html {
     
     let on_clear = {
         let id = release.id.clone();
-        let callback = props.on_move.clone();
-        let current_env = release.current_environment.clone();
+        let callback = props.on_clear.clone();
         
         Callback::from(move |_| {
-            // Determine next environment
-            let next_env = match current_env {
-                Environment::Development => Environment::Staging,
-                Environment::Staging => Environment::Production,
-                Environment::Production => return, // No next environment
-            };
-            
-            callback.emit((id.clone(), next_env));
+            callback.emit(id.clone());
         })
     };
     
-    // Card styling based on status
-    let status_class = match release.status {
-        ReleaseStatus::Pending => "status-pending",
-        ReleaseStatus::InProgress => "status-in-progress",
-        ReleaseStatus::Completed => "status-completed",
-        ReleaseStatus::Failed => "status-failed",
-    };
+    // Get status class and display name
+    let status_class = release.status.css_class();
+    let status_display = release.status.display_name();
+    
+    // Determine if "Clear & Move" button should be shown
+    let can_be_cleared = release.can_be_cleared();
     
     html! {
         <div 
@@ -73,7 +65,7 @@ pub fn release_card(props: &ReleaseCardProps) -> Html {
             <div class="card-header">
                 <h3 class="release-title">{ &release.title }</h3>
                 <div class="release-status">
-                    <span class={status_class}>{ format!("{:?}", release.status) }</span>
+                    <span class={status_class}>{ status_display }</span>
                 </div>
             </div>
             
@@ -100,11 +92,19 @@ pub fn release_card(props: &ReleaseCardProps) -> Html {
                 </button>
                 
                 {
-                    // Only show clear button if status is completed
-                    if release.status == ReleaseStatus::Completed {
+                    // Only show clear button if release can be cleared
+                    if can_be_cleared {
+                        let next_status = release.next_status();
+                        let button_text = match next_status {
+                            Some(ReleaseStatus::DeployingToStaging) => "Clear & Deploy to Staging",
+                            Some(ReleaseStatus::DeployingToProduction) => "Clear & Deploy to Production",
+                            Some(ReleaseStatus::ClearedInProduction) => "Mark as Completed",
+                            _ => "Clear",
+                        };
+                        
                         html! {
                             <button class="clear-btn" onclick={on_clear}>
-                                { "Clear & Move" }
+                                { button_text }
                             </button>
                         }
                     } else {
@@ -125,18 +125,13 @@ pub fn release_card(props: &ReleaseCardProps) -> Html {
                             <ul class="deployment-items">
                                 {
                                     release.deployment_items.iter().map(|item| {
-                                        let item_status_class = match item.status {
-                                            ReleaseStatus::Pending => "status-pending",
-                                            ReleaseStatus::InProgress => "status-in-progress",
-                                            ReleaseStatus::Completed => "status-completed",
-                                            ReleaseStatus::Failed => "status-failed",
-                                        };
+                                        let item_status_class = item.status.css_class();
                                         
                                         html! {
                                             <li class={classes!("deployment-item", item_status_class)}>
                                                 <span class="item-name">{ &item.name }</span>
                                                 <span class="item-status">
-                                                    { format!("{:?}", item.status) }
+                                                    { item.status.display_name() }
                                                 </span>
                                                 
                                                 {
@@ -179,6 +174,13 @@ pub fn release_card(props: &ReleaseCardProps) -> Html {
                                     }).collect::<Html>()
                                 }
                             </ul>
+                            
+                            <div class="pipeline-info">
+                                <h4>{ "Pipeline Information" }</h4>
+                                <p><strong>{ "Current Status: " }</strong>{ release.status.display_name() }</p>
+                                <p><strong>{ "Skip Staging: " }</strong>{ if release.skip_staging { "Yes" } else { "No" } }</p>
+                                <p><strong>{ "Target Environment: " }</strong>{ format!("{:?}", release.target_environment) }</p>
+                            </div>
                         </div>
                     }
                 } else {

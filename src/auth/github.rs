@@ -42,7 +42,7 @@ fn create_github_oauth_client() -> BasicClient {
 }
 
 #[get("/login")]
-async fn github_login(req: HttpRequest) -> impl Responder {
+async fn github_login(_req: HttpRequest) -> impl Responder {
     let client = create_github_oauth_client();
 
     let (auth_url, csrf_token) = client

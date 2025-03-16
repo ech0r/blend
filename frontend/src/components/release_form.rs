@@ -25,6 +25,31 @@ pub fn release_form(props: &ReleaseFormProps) -> Html {
     let solr_checked = use_state(|| true);
     let app_checked = use_state(|| true);
     
+    // Skip staging option state
+    let skip_staging = use_state(|| false);
+    
+    // Track current environment selection to conditionally show skip staging option
+    let current_env = use_state(|| "Development".to_string());
+    let target_env = use_state(|| "Staging".to_string());
+    
+    let on_current_env_change = {
+        let current_env = current_env.clone();
+        Callback::from(move |e: Event| {
+            if let Some(select) = e.target_dyn_into::<HtmlSelectElement>() {
+                current_env.set(select.value());
+            }
+        })
+    };
+    
+    let on_target_env_change = {
+        let target_env = target_env.clone();
+        Callback::from(move |e: Event| {
+            if let Some(select) = e.target_dyn_into::<HtmlSelectElement>() {
+                target_env.set(select.value());
+            }
+        })
+    };
+    
     let on_data_change = {
         let data_checked = data_checked.clone();
         Callback::from(move |_| {
@@ -46,6 +71,13 @@ pub fn release_form(props: &ReleaseFormProps) -> Html {
         })
     };
     
+    let on_skip_staging_change = {
+        let skip_staging = skip_staging.clone();
+        Callback::from(move |_| {
+            skip_staging.set(!*skip_staging);
+        })
+    };
+    
     let on_submit = {
         let title_ref = title_ref.clone();
         let client_ref = client_ref.clone();
@@ -57,6 +89,7 @@ pub fn release_form(props: &ReleaseFormProps) -> Html {
         let data_checked = data_checked.clone();
         let solr_checked = solr_checked.clone();
         let app_checked = app_checked.clone();
+        let skip_staging = skip_staging.clone();
         
         let callback = props.on_submit.clone();
         
@@ -126,7 +159,7 @@ pub fn release_form(props: &ReleaseFormProps) -> Html {
             let deployment_items = deployment_items.into_iter()
                 .map(|name| DeploymentItem {
                     name,
-                    status: ReleaseStatus::Pending,
+                    status: ReleaseStatus::InDevelopment,
                     logs: Vec::new(),
                     error: None,
                 })
@@ -142,9 +175,10 @@ pub fn release_form(props: &ReleaseFormProps) -> Html {
                 deployment_items,
                 created_at: Utc::now(),
                 scheduled_at,
-                status: ReleaseStatus::Pending,
+                status: ReleaseStatus::InDevelopment,
                 created_by: "current_user".to_string(), // Will be assigned by backend
                 progress: 0.0,
+                skip_staging: *skip_staging, // Add the skip_staging flag
             };
             
             callback.emit(release);
@@ -162,6 +196,9 @@ pub fn release_form(props: &ReleaseFormProps) -> Html {
     let now = Utc::now();
     let default_date = now.format("%Y-%m-%d").to_string();
     let default_time = now.format("%H:%M").to_string();
+    
+    // Determine if we should show the skip staging option
+    let show_skip_staging = *current_env == "Development" && *target_env == "Production";
     
     html! {
         <div class="release-form">
@@ -204,6 +241,7 @@ pub fn release_form(props: &ReleaseFormProps) -> Html {
                         ref={current_env_ref}
                         id="current-env"
                         required=true
+                        onchange={on_current_env_change}
                     >
                         <option value="Development">{ "Development" }</option>
                         <option value="Staging">{ "Staging" }</option>
@@ -211,16 +249,45 @@ pub fn release_form(props: &ReleaseFormProps) -> Html {
                 </div>
                 
                 <div class="form-group">
-                    <label for="target-env">{ "Target Environment" }</label>
+                    <label for="target-env">{ "Target Environment (Final Destination)" }</label>
                     <select 
                         ref={target_env_ref}
                         id="target-env"
                         required=true
+                        onchange={on_target_env_change}
                     >
                         <option value="Staging">{ "Staging" }</option>
                         <option value="Production">{ "Production" }</option>
                     </select>
                 </div>
+                
+                {
+                    // Only show "Skip Staging" option when current is Development and target is Production
+                    if show_skip_staging {
+                        html! {
+                            <div class="form-group">
+                                <label class="checkbox-label">
+                                    <input 
+                                        type="checkbox"
+                                        checked={*skip_staging}
+                                        onchange={on_skip_staging_change}
+                                    />
+                                    { "Skip Staging (Deploy directly to Production)" }
+                                </label>
+                                <p class="help-text">
+                                    { if *skip_staging {
+                                        "This release will go directly from Development to Production."
+                                      } else {
+                                        "This release will go from Development to Staging first, then to Production."
+                                      }
+                                    }
+                                </p>
+                            </div>
+                        }
+                    } else {
+                        html! {}
+                    }
+                }
                 
                 <div class="form-group">
                     <label>{ "Deployment Items" }</label>

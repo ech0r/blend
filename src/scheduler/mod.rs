@@ -4,10 +4,9 @@ use std::process::{Stdio};
 use tokio::process::Command;
 use tokio::io::{BufReader, AsyncBufReadExt};
 use log::{info, error, warn};
-use crate::models::{Release, ReleaseStatus, DeploymentItem};
+use crate::models::{Release, ReleaseStatus};
 use crate::storage::SledStorage;
 use chrono::Utc;
-use uuid::Uuid;
 
 // Import WebSocket broadcast functionality
 use crate::websocket::server::broadcast_release_update;
@@ -24,15 +23,15 @@ pub fn start_scheduler(db: web::Data<SledStorage>) -> tokio::task::JoinHandle<()
         loop {
             interval.tick().await;
             
-            info!("Checking for pending releases...");
-            match check_pending_releases(db.clone()).await {
+            info!("Checking for releases to process...");
+            match check_releases_to_process(db.clone()).await {
                 Ok(count) => {
                     if count > 0 {
-                        info!("Processed {} pending releases", count);
+                        info!("Processed {} releases", count);
                     }
                 }
                 Err(e) => {
-                    error!("Error checking pending releases: {}", e);
+                    error!("Error checking releases to process: {}", e);
                 }
             }
             
@@ -51,32 +50,21 @@ pub fn start_scheduler(db: web::Data<SledStorage>) -> tokio::task::JoinHandle<()
     })
 }
 
-// Check for pending releases and process them
-async fn check_pending_releases(db: web::Data<SledStorage>) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
-    let pending_releases = db.get_pending_releases()?;
-    let count = pending_releases.len();
+// Check for releases that need to be processed
+async fn check_releases_to_process(db: web::Data<SledStorage>) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
+    // Get releases that need processing (those in a "Deploying" state)
+    let releases_to_process = db.get_releases_to_process()?;
+    let count = releases_to_process.len();
     
     if count == 0 {
         return Ok(0);
     }
     
-    info!("Found {} pending releases", count);
+    info!("Found {} releases to process", count);
     
-    // Process each pending release
-    for mut release in pending_releases {
+    // Process each release
+    for release in releases_to_process {
         info!("Processing release: {}", release.id);
-        
-        // Update status to in progress
-        release.status = ReleaseStatus::InProgress;
-        db.save_release(&release)?;
-        
-        // Send WebSocket update
-        broadcast_release_update(
-            release.id.to_string(),
-            "InProgress".to_string(), 
-            0.0, 
-            Some("Starting deployment process...".to_string())
-        );
         
         // Clone release for async processing
         let release_id = release.id;
@@ -106,61 +94,64 @@ async fn process_release(release_id: uuid::Uuid, db: web::Data<SledStorage>) -> 
     
     info!("Starting release process for {}: {}", release.id, release.title);
     
-    // Update status to in progress
-    release.status = ReleaseStatus::InProgress;
+    // Update progress
     release.progress = 0.0;
     db.save_release(&release)?;
     
     // Broadcast status update
     broadcast_release_update(
         release.id.to_string(),
-        "InProgress".to_string(), 
+        format!("{:?}", release.status), 
         0.0, 
         Some(format!("Starting deployment process for {}", release.title))
     );
     
     // Process each deployment item
     let total_items = release.deployment_items.len();
-    let mut completed_items = 0;
+    let completed_items = 0;
     let mut has_errors = false;
     
     // Process deployment items in parallel
     let mut handles = vec![];
     
-    for (i, item) in release.deployment_items.iter_mut().enumerate() {
+    // First save the release status for all items 
+    for item in release.deployment_items.iter_mut() {
+        // Set all items to the same status as the release
+        item.status = release.status.clone();
+    }
+    db.save_release(&release)?;
+    
+    // Then process each item
+    for (_i, item) in release.deployment_items.iter().enumerate() {
         let item_name = item.name.clone();
         let release_id_str = release.id.to_string();
         let db_clone = db.clone();
-        
-        info!("Scheduling deployment item: {}", item_name);
-        
-        // Update item status
-        item.status = ReleaseStatus::InProgress;
-        db.save_release(&release)?;
+        let status = release.status.clone(); // Clone the status
         
         // Update progress and broadcast
-        release.progress = (completed_items as f32 / total_items as f32) * 100.0;
         broadcast_release_update(
             release_id_str.clone(),
-            "InProgress".to_string(), 
-            release.progress, 
+            format!("{:?}", status), 
+            0.0, 
             Some(format!("Starting {} deployment", item_name))
         );
         
         // Run in a separate task
         let handle = tokio::spawn(async move {
-            let result = process_deployment_item(&item_name, release_id_str).await;
+            let result = process_deployment_item(&item_name, release_id_str.clone(), &status).await;
             
             // Get the release again to avoid conflicts
             let db_ref = db_clone.as_ref();
-            if let Ok(Some(mut updated_release)) = db_ref.get_release(&Uuid::parse_str(&release_id_str).unwrap()) {
+            if let Ok(Some(mut updated_release)) = db_ref.get_release(&release_id) {
                 // Find the right deployment item
                 if let Some(deployment_item) = updated_release.deployment_items.iter_mut().find(|it| it.name == item_name) {
                     if let Err(e) = &result {
-                        deployment_item.status = ReleaseStatus::Failed;
+                        deployment_item.status = ReleaseStatus::Error;
                         deployment_item.error = Some(e.to_string());
                     } else {
-                        deployment_item.status = ReleaseStatus::Completed;
+                        // Get the next status before modifying the item
+                        let next_status = updated_release.next_status_after_deployment();
+                        deployment_item.status = next_status;
                     }
                     
                     // Save updated deployment item
@@ -194,13 +185,14 @@ async fn process_release(release_id: uuid::Uuid, db: web::Data<SledStorage>) -> 
     };
     
     // Check all deployment items for errors
-    has_errors = release.deployment_items.iter().any(|item| item.status == ReleaseStatus::Failed);
+    has_errors = release.deployment_items.iter().any(|item| matches!(item.status, ReleaseStatus::Error));
     
     // Update overall status
     if has_errors {
-        release.status = ReleaseStatus::Failed;
+        release.status = ReleaseStatus::Error;
     } else {
-        release.status = ReleaseStatus::Completed;
+        // Set next status based on current status
+        release.status = release.next_status_after_deployment();
         release.progress = 100.0;
     }
     
@@ -210,7 +202,7 @@ async fn process_release(release_id: uuid::Uuid, db: web::Data<SledStorage>) -> 
     // Broadcast final status
     broadcast_release_update(
         release.id.to_string(),
-        release.status.to_string(), 
+        format!("{:?}", release.status), 
         release.progress, 
         Some(format!("Deployment process complete for {}", release.title))
     );
@@ -221,13 +213,20 @@ async fn process_release(release_id: uuid::Uuid, db: web::Data<SledStorage>) -> 
 }
 
 // Process a single deployment item
-async fn process_deployment_item(item_name: &str, release_id: String) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    // Create a real deployment process based on item type
+async fn process_deployment_item(item_name: &str, release_id: String, current_status: &ReleaseStatus) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // Determine the environment based on the status
+    let env_name = match current_status {
+        ReleaseStatus::DeployingToStaging => "staging",
+        ReleaseStatus::DeployingToProduction => "production",
+        _ => "unknown",
+    };
+    
+    // Create a real deployment process based on item type and environment
     let command = match item_name {
-        "data" => format!("for i in 1..10; do echo \"Deploying data step $i\"; sleep 3; done"),
-        "solr" => format!("for i in 1..6; do echo \"Rebuilding Solr index step $i\"; sleep 2; done"),
-        "app" => format!("for i in 1..8; do echo \"Deploying application step $i\"; sleep 4; done"),
-        _ => format!("echo \"Unknown deployment type: {}\"; exit 1", item_name),
+        "data" => format!("for i in 1..10; do echo \"[data] Deploying data to {} step $i\"; sleep 3; done", env_name),
+        "solr" => format!("for i in 1..6; do echo \"[solr] Rebuilding Solr index in {} step $i\"; sleep 2; done", env_name),
+        "app" => format!("for i in 1..8; do echo \"[app] Deploying application to {} step $i\"; sleep 4; done", env_name),
+        _ => format!("echo \"[{}] Unknown deployment type\"; exit 1", item_name),
     };
     
     info!("Starting {} deployment with command: {}", item_name, command);
@@ -289,7 +288,7 @@ async fn process_deployment_item(item_name: &str, release_id: String) -> Result<
                 // Broadcast error
                 broadcast_release_update(
                     release_id.clone(),
-                    "InProgress".to_string(), 
+                    "Error".to_string(), 
                     0.0, 
                     Some(format!("[{}] ERROR: {}", item_name, line))
                 );
@@ -308,7 +307,7 @@ async fn process_deployment_item(item_name: &str, release_id: String) -> Result<
         let error_message = format!("{} deployment failed with exit code: {}", item_name, status);
         broadcast_release_update(
             release_id.clone(),
-            "Failed".to_string(), 
+            "Error".to_string(), 
             0.0, 
             Some(error_message.clone())
         );
@@ -320,7 +319,7 @@ async fn process_deployment_item(item_name: &str, release_id: String) -> Result<
         release_id.clone(),
         "Completed".to_string(), 
         100.0, 
-        Some(format!("{} deployment completed successfully", item_name))
+        Some(format!("{} deployment to {} completed successfully", item_name, env_name))
     );
     
     Ok(())
