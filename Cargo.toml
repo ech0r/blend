@@ -4,3 +4,24 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+# Backend
+actix-web = "4.4"           # Web framework
+actix-files = "0.6"          # Static file serving
+actix-web-actors = "4.2"     # WebSocket support
+actix = "0.13"              # Actor framework
+sled = "0.34"                # Storage as per requirements
+tokio = { version = "1", features = ["full"] } # Async runtime
+oauth2 = "4.4"               # OAuth2 for GitHub login
+reqwest = { version = "0.11", features = ["json"] } # HTTP client
+serde = { version = "1.0", features = ["derive"] } # Serialization
+serde_json = "1.0"           # JSON handling
+chrono = { version = "0.4", features = ["serde"] } # Date/time handling
+uuid = { version = "1.4", features = ["v4", "serde"] } # Unique IDs
+log = "0.4"                  # Logging
+env_logger = "0.10"          # Logging configuration
+dotenv = "0.15"              # Environment configuration
+futures = "0.3"              # Async utilities
+lazy_static = "1.4"          # Lazy static initialization
+
+[workspace]
+members = [".", "frontend"]

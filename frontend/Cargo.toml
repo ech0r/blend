@@ -1,0 +1,43 @@
+[package]
+name = "blend-frontend"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# WASM framework and bindings
+yew = { version = "0.20", features = ["csr"] }
+wasm-bindgen = "0.2"
+web-sys = { version = "0.3", features = [
+    "HtmlInputElement",
+    "HtmlSelectElement",
+    "WebSocket",
+    "MessageEvent",
+    "ErrorEvent", 
+    "CloseEvent",
+    "DragEvent",
+    "DataTransfer",
+    "Element", 
+    "DomRect",
+    "console"
+]}
+js-sys = "0.3"
+wasm-bindgen-futures = "0.4"
+wasm-logger = "0.2"
+console_error_panic_hook = "0.1"
+log = "0.4"
+
+# Network and utilities for WASM
+gloo-net = "0.2"
+gloo-timers = { version = "0.2", features = ["futures"] }
+gloo-utils = "0.1"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Shared with backend
+uuid = { version = "1.4", features = ["v4", "serde", "js"] }
+chrono = { version = "0.4", features = ["serde", "wasmbind"] }
