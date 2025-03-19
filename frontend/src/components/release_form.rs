@@ -1,7 +1,8 @@
 use yew::prelude::*;
 use web_sys::{HtmlInputElement, HtmlSelectElement};
+use log::{info, debug, error};
 use wasm_bindgen::JsCast;
-use chrono::{Utc, TimeZone, NaiveDateTime};
+use chrono::{Utc, TimeZone, Local, NaiveDateTime};
 use crate::models::{Release, Client, Environment, ReleaseStatus, DeploymentItem};
 
 #[derive(Properties, PartialEq)]
@@ -24,29 +25,60 @@ pub fn release_form(props: &ReleaseFormProps) -> Html {
     let data_checked = use_state(|| true);
     let solr_checked = use_state(|| true);
     let app_checked = use_state(|| true);
+
+    // Release date and time
+    let now = Utc::now();
+    let scheduled_date = use_state(|| now.format("%Y-%m-%d").to_string());
+    let scheduled_time = use_state(|| now.format("%H:%M").to_string());
     
     // Skip staging option state
     let skip_staging = use_state(|| false);
+    let show_skip_staging = use_state(|| false);
     
-    // Track current environment selection to conditionally show skip staging option
     let current_env = use_state(|| "Development".to_string());
     let target_env = use_state(|| "Staging".to_string());
     
     let on_current_env_change = {
+        let target_env = target_env.clone();
         let current_env = current_env.clone();
+        let show_skip_staging = show_skip_staging.clone();
         Callback::from(move |e: Event| {
             if let Some(select) = e.target_dyn_into::<HtmlSelectElement>() {
+                info!("selected value: {}", select.value());
                 current_env.set(select.value());
+                // Determine if we should show the skip staging option
+                show_skip_staging.set(select.value() == "Development" && *target_env == "Production");
+                info!("show_skip_staging: {}", *show_skip_staging);
+                debug!("current_env: {}", select.value());
+                debug!("target_env: {}", *target_env);
             }
         })
     };
     
     let on_target_env_change = {
         let target_env = target_env.clone();
+        let current_env = current_env.clone();
+        let show_skip_staging = show_skip_staging.clone();
         Callback::from(move |e: Event| {
             if let Some(select) = e.target_dyn_into::<HtmlSelectElement>() {
+                info!("selected value: {}", select.value());
                 target_env.set(select.value());
+                show_skip_staging.set(*current_env == "Development" && select.value() == "Production");
+                // Determine if we should show the skip staging option
+                info!("show_skip_staging: {}", *show_skip_staging);
+                debug!("current_env: {}", *current_env);
+                debug!("target_env: {}", select.value());
             }
+        })
+    };
+
+    let on_skip_staging_change = {
+        let skip_staging = skip_staging.clone();
+        Callback::from(move |e: Event| {
+            if let Some(checkbox) = e.target_dyn_into::<HtmlInputElement>() {            
+                skip_staging.set(checkbox.checked());
+            }
+            info!("skip_staging: {}", *skip_staging);
         })
     };
     
@@ -71,12 +103,38 @@ pub fn release_form(props: &ReleaseFormProps) -> Html {
         })
     };
     
-    let on_skip_staging_change = {
-        let skip_staging = skip_staging.clone();
+    //let on_skip_staging_change = {
+    //    let skip_staging = skip_staging.clone();
+    //    Callback::from(move |_| {
+    //        skip_staging.set(!*skip_staging);
+    //    })
+    //};
+
+    let get_date = {
+        let scheduled_date_ref = scheduled_date_ref.clone();
+        let datetime = Local::now();
+        let today = datetime.date_naive();
         Callback::from(move |_| {
-            skip_staging.set(!*skip_staging);
+            if let Some(date_input) = scheduled_date_ref.cast::<HtmlInputElement>() {
+                date_input.set_value(&today.to_string())
+            }
+            info!("Today: {}", today);
         })
     };
+    
+    let get_time = {
+        let scheduled_time_ref = scheduled_time_ref.clone();
+        let datetime = Local::now(); 
+        let time = datetime.time();
+        let hours_minutes = time.format("%H:%M");
+        Callback::from(move |_| {
+            if let Some(time_input) = scheduled_time_ref.cast::<HtmlInputElement>() {
+                time_input.set_value(&hours_minutes.to_string())
+            }
+            info!("Now: {}", now);
+        })
+    };
+
     
     let on_submit = {
         let title_ref = title_ref.clone();
@@ -192,13 +250,7 @@ pub fn release_form(props: &ReleaseFormProps) -> Html {
         })
     };
     
-    // Set default values for date and time inputs
-    let now = Utc::now();
-    let default_date = now.format("%Y-%m-%d").to_string();
-    let default_time = now.format("%H:%M").to_string();
     
-    // Determine if we should show the skip staging option
-    let show_skip_staging = *current_env == "Development" && *target_env == "Production";
     
     html! {
         <div class="release-form">
@@ -242,8 +294,9 @@ pub fn release_form(props: &ReleaseFormProps) -> Html {
                         id="current-env"
                         required=true
                         onchange={on_current_env_change}
+                        value={(*current_env).clone()}
                     >
-                        <option value="Development">{ "Development" }</option>
+                        <option selected=true value="Development">{ "Development" }</option>
                         <option value="Staging">{ "Staging" }</option>
                     </select>
                 </div>
@@ -255,25 +308,27 @@ pub fn release_form(props: &ReleaseFormProps) -> Html {
                         id="target-env"
                         required=true
                         onchange={on_target_env_change}
+                        value={(*target_env).clone()}
                     >
-                        <option value="Staging">{ "Staging" }</option>
+                        <option selected=true value="Staging">{ "Staging" }</option>
                         <option value="Production">{ "Production" }</option>
                     </select>
                 </div>
                 
                 {
                     // Only show "Skip Staging" option when current is Development and target is Production
-                    if show_skip_staging {
+                    if *show_skip_staging {
                         html! {
                             <div class="form-group">
-                                <label class="checkbox-label">
-                                    <input 
-                                        type="checkbox"
-                                        checked={*skip_staging}
-                                        onchange={on_skip_staging_change}
-                                    />
-                                    { "Skip Staging (Deploy directly to Production)" }
-                                </label>
+                                <div class="checkbox-group">
+                                    <label class="checkbox-label">
+                                        { "Skip Staging (Deploy directly to Production)" }
+                                        <input 
+                                            type="checkbox"
+                                            onchange={on_skip_staging_change}
+                                        />
+                                    </label>
+                                </div>
                                 <p class="help-text">
                                     { if *skip_staging {
                                         "This release will go directly from Development to Production."
@@ -328,20 +383,26 @@ pub fn release_form(props: &ReleaseFormProps) -> Html {
                         ref={scheduled_date_ref}
                         id="scheduled-date"
                         type="date"
-                        value={default_date}
+                        value={(*scheduled_date).clone()}
                         required=true
                     />
+                    <button type="button" class="form-btn" onclick={get_date}>
+                        { "Today" }
+                    </button>
                 </div>
                 
                 <div class="form-group">
-                    <label for="scheduled-time">{ "Scheduled Time" }</label>
+                    <label for="scheduled-time">{ "Scheduled Time (Local for you)" }</label>
                     <input 
                         ref={scheduled_time_ref}
                         id="scheduled-time"
                         type="time"
-                        value={default_time}
+                        value={(*scheduled_time).clone()}
                         required=true
                     />
+                    <button type="button" class="form-btn" onclick={get_time}>
+                        { "Now" }
+                    </button>
                 </div>
                 
                 <div class="form-actions">

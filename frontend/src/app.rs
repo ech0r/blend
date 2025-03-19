@@ -420,6 +420,7 @@ impl Component for App {
                 {
                     // Release form modal
                     if self.show_release_form {
+                        info!("showing release form!");
                         html! {
                             <div class="modal-overlay">
                                 <div class="modal-container">
