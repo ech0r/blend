@@ -32,4 +32,6 @@ Create a software release management tool that meets the following requirements 
 9. Users should be able to create a new release via a form, it takes the following information, (title, client - select populated from client endpoint, current environment, final target environment, deployment items (data, solr, app) - these could be toggles or checkmarks.
 10. Users should have the option to "skip staging" and deploy from "Development to Production". Releases can take the following paths, Development -> Staging -> Production, Development -> Production, Development -> Staging, Staging -> Production.
 
+Progress:
 
+We have a working dashboard that is styled correctly, we just need to button up some functionality with the releases and the backend functions. The purpose of the backend is to run various bash scripts and stream their output to the front-end, both STDOUT and STDERR, we want to also collect the exit codes from these processes and figure out if the exited successfully. Based on that we want to update the progress bars on the release cards and find a nice way to display the output from the scripts, they can be quite verbose. 
