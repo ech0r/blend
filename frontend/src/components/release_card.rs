@@ -67,7 +67,8 @@ pub fn release_card(props: &ReleaseCardProps) -> Html {
     let can_be_cleared = release.can_be_cleared();
     
     // Check if there are any logs for this release
-    let has_logs = release.deployment_items.iter().any(|item| !item.logs.is_empty());
+    //let has_logs = release.deployment_items.iter().any(|item| !item.logs.is_empty());
+    let has_logs = true;
     
     html! {
         <div 
@@ -105,19 +106,6 @@ pub fn release_card(props: &ReleaseCardProps) -> Html {
                 </button>
                 
                 {
-                    // Show logs button if there are logs
-                    if has_logs {
-                        html! {
-                            <button class="logs-btn" onclick={on_view_logs}>
-                                { "View Logs" }
-                            </button>
-                        }
-                    } else {
-                        html! {}
-                    }
-                }
-                
-                {
                     // Only show clear button if release can be cleared
                     if can_be_cleared {
                         let next_status = release.next_status();
@@ -131,6 +119,19 @@ pub fn release_card(props: &ReleaseCardProps) -> Html {
                         html! {
                             <button class="clear-btn" onclick={on_clear}>
                                 { button_text }
+                            </button>
+                        }
+                    } else {
+                        html! {}
+                    }
+                }
+                
+                {
+                    // View logs button - always visible if there are any logs
+                    if has_logs {
+                        html! {
+                            <button class="logs-btn" onclick={on_view_logs}>
+                                { "View Logs" }
                             </button>
                         }
                     } else {

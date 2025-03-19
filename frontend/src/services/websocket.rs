@@ -19,6 +19,7 @@ pub enum WsAction {
 pub struct WebSocketService {
     ws: Option<WebSocket>,
     callback: Callback<WsAction>,
+    reconnect_attempts: u8,
 }
 
 impl WebSocketService {
@@ -26,6 +27,7 @@ impl WebSocketService {
         Self {
             ws: None,
             callback,
+            reconnect_attempts: 0,
         }
     }
     
@@ -67,17 +69,6 @@ impl WebSocketService {
         let onopen_closure = Closure::wrap(Box::new(move |_| {
             info!("WebSocket connection established");
             onopen_callback.emit(WsAction::Connect);
-            
-            // Send a test message to check if the connection is working
-            let test_msg = WsMessage::Chat {
-                username: "Client".to_string(),
-                message: "Connection test".to_string(),
-                timestamp: "".to_string(),
-            };
-            
-            if let Ok(json) = serde_json::to_string(&test_msg) {
-                let _ = ws_clone.send_with_str(&json);
-            }
         }) as Box<dyn FnMut(JsValue)>);
         ws.set_onopen(Some(onopen_closure.as_ref().unchecked_ref()));
         onopen_closure.forget();
@@ -120,6 +111,10 @@ impl WebSocketService {
         onclose_closure.forget();
         
         self.ws = Some(ws);
+        
+        // Reset reconnect attempts on successful connection attempt
+        self.reconnect_attempts = 0;
+        
         Ok(())
     }
     

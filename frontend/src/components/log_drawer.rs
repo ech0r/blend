@@ -141,7 +141,7 @@ pub fn log_drawer(props: &LogDrawerProps) -> Html {
                             html! {
                                 <>
                                     {
-                                        filtered_logs.iter().map(|log| {
+                                        filtered_logs.iter().enumerate().map(|(index, log)| {
                                             let log_class = if log.is_error {
                                                 "log-entry error"
                                             } else {
@@ -149,7 +149,7 @@ pub fn log_drawer(props: &LogDrawerProps) -> Html {
                                             };
                                             
                                             html! {
-                                                <div class={log_class}>
+                                                <div class={log_class} style={format!("--index: {}", index)}>
                                                     <span class="log-timestamp">{ &log.timestamp }</span>
                                                     <span class="log-content">{ &log.content }</span>
                                                 </div>

@@ -141,18 +141,26 @@ impl Actor for WebSocketSession {
     fn started(&mut self, ctx: &mut Self::Context) {
         self.heartbeat(ctx);
         
-        // Register WebSocket connection in storage
-        if let Err(e) = self.db.add_websocket(&self.id, &self.user_id) {
-            error!("Failed to register WebSocket connection: {}", e);
-            ctx.stop();
-            return;
-        }
-        
-        // Register actor address in active sessions
+        // Register actor address in active sessions immediately
+        // This is the important part - we want to make the WebSocket usable immediately
         if let Ok(mut sessions) = ACTIVE_SESSIONS.lock() {
             sessions.insert(self.id.clone(), ctx.address());
             info!("Added session {} to active sessions. Total active: {}", self.id, sessions.len());
         }
+        
+        // Clone what we need for async registration
+        let id = self.id.clone();
+        let user_id = self.user_id.clone();
+        let db = self.db.clone();
+        
+        // Register WebSocket connection in storage asynchronously
+        // This prevents the database I/O from blocking the WebSocket startup
+        tokio::spawn(async move {
+            if let Err(e) = db.add_websocket(&id, &user_id) {
+                error!("Failed to register WebSocket connection in database: {}", e);
+                // We don't stop the actor since the WebSocket is already functional
+            }
+        });
         
         info!("WebSocket connection started: {}", self.id);
         

@@ -13,10 +13,13 @@ pub async fn ws_index(
     let ws_id = Uuid::new_v4().to_string();
     info!("New WebSocket connection: {}", ws_id);
     
-    // Log request headers for debugging
-    info!("WebSocket request headers:");
-    for (name, value) in req.headers() {
-        info!("  {}: {}", name, value.to_str().unwrap_or("Invalid UTF-8"));
+    // Only log headers in debug build
+    #[cfg(debug_assertions)]
+    {
+        info!("WebSocket request headers:");
+        for (name, value) in req.headers() {
+            info!("  {}: {}", name, value.to_str().unwrap_or("Invalid UTF-8"));
+        }
     }
     
     // TODO: Get user ID from session

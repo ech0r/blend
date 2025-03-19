@@ -2,6 +2,7 @@ use yew::prelude::*;
 use web_sys::HtmlInputElement;
 use wasm_bindgen::JsCast;
 use crate::models::WsMessage;
+use chrono::{DateTime, Local};
 
 #[derive(Properties, PartialEq)]
 pub struct ChatPanelProps {
@@ -42,11 +43,13 @@ pub fn chat_panel(props: &ChatPanelProps) -> Html {
                     props.messages.iter().map(|msg| {
                         match msg {
                             WsMessage::Chat { username, message, timestamp } => {
+                                let timestamp = DateTime::parse_from_rfc3339(timestamp).expect("Failed to parse datetime");
+                                let local_datetime = timestamp.with_timezone(&Local).format("%Y-%m-%d %H:%M");
                                 html! {
                                     <div class="chat-message">
                                         <div class="message-header">
                                             <span class="username">{ username }</span>
-                                            <span class="timestamp">{ timestamp }</span>
+                                            <span class="timestamp">{ local_datetime }</span>
                                         </div>
                                         <div class="message-content">
                                             { message }

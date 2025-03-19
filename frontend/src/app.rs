@@ -71,12 +71,9 @@ impl Component for App {
             error: None,
         };
         
-        // Fetch data on creation - delay slightly to ensure DOM is ready
-        let link = ctx.link().clone();
-        gloo_timers::callback::Timeout::new(100, move || {
-            link.send_message(AppMsg::FetchReleases);
-            link.send_message(AppMsg::ConnectWebSocket);
-        }).forget();
+        // Fetch data immediately - no delay
+        ctx.link().send_message(AppMsg::FetchReleases);
+        ctx.link().send_message(AppMsg::ConnectWebSocket);
         
         app
     }
@@ -338,13 +335,14 @@ impl Component for App {
                         info!("WebSocket disconnected");
                         self.ws_service = None;
                         
-                        // Try to reconnect after a delay - but only once
+                        // Try to reconnect after a short delay
                         let link = ctx.link().clone();
                         let callback = Box::new(move || {
                             info!("Attempting to reconnect WebSocket after timeout");
                             link.send_message(AppMsg::ConnectWebSocket);
                         });
-                        gloo_timers::callback::Timeout::new(5_000, callback).forget();
+                        // Reduced from 5000ms to 1000ms (1 second)
+                        gloo_timers::callback::Timeout::new(1_000, callback).forget();
                         
                         // Show reconnecting message
                         self.error = Some("WebSocket disconnected. Reconnecting...".to_string());
@@ -355,13 +353,14 @@ impl Component for App {
                         self.error = Some(format!("WebSocket error: {}", err));
                         self.ws_service = None;
                         
-                        // Try to reconnect after a delay - but only once
+                        // Try to reconnect after a short delay 
                         let link = ctx.link().clone();
                         let callback = Box::new(move || {
                             info!("Attempting to reconnect WebSocket after error");
                             link.send_message(AppMsg::ConnectWebSocket);
                         });
-                        gloo_timers::callback::Timeout::new(5_000, callback).forget();
+                        // Reduced from 5000ms to 1000ms (1 second)
+                        gloo_timers::callback::Timeout::new(1_000, callback).forget();
                         
                         return true;
                     }
