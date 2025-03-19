@@ -8,7 +8,8 @@ pub struct ReleaseCardProps {
     pub release: Release,
     pub on_delete: Callback<String>,
     pub on_move: Callback<(String, Environment)>,
-    pub on_clear: Callback<String>, // New clear callback
+    pub on_clear: Callback<String>,
+    pub on_view_logs: Callback<String>, // This matches the callback in kanban.rs
 }
 
 #[function_component(ReleaseCard)]
@@ -49,12 +50,24 @@ pub fn release_card(props: &ReleaseCardProps) -> Html {
         })
     };
     
+    let on_view_logs = {
+        let id = release.id.clone();
+        let callback = props.on_view_logs.clone();
+        
+        Callback::from(move |_| {
+            callback.emit(id.clone());
+        })
+    };
+    
     // Get status class and display name
     let status_class = release.status.css_class();
     let status_display = release.status.display_name();
     
     // Determine if "Clear & Move" button should be shown
     let can_be_cleared = release.can_be_cleared();
+    
+    // Check if there are any logs for this release
+    let has_logs = release.deployment_items.iter().any(|item| !item.logs.is_empty());
     
     html! {
         <div 
@@ -90,6 +103,19 @@ pub fn release_card(props: &ReleaseCardProps) -> Html {
                 <button onclick={on_details_click}>
                     { if *show_details { "Hide Details" } else { "Show Details" } }
                 </button>
+                
+                {
+                    // Show logs button if there are logs
+                    if has_logs {
+                        html! {
+                            <button class="logs-btn" onclick={on_view_logs}>
+                                { "View Logs" }
+                            </button>
+                        }
+                    } else {
+                        html! {}
+                    }
+                }
                 
                 {
                     // Only show clear button if release can be cleared
@@ -137,20 +163,8 @@ pub fn release_card(props: &ReleaseCardProps) -> Html {
                                                 {
                                                     if !item.logs.is_empty() {
                                                         html! {
-                                                            <div class="logs">
-                                                                <h5>{ "Logs" }</h5>
-                                                                <pre class="log-output">
-                                                                    {
-                                                                        for item.logs.iter().map(|log| {
-                                                                            html! {
-                                                                                <>
-                                                                                    { log }
-                                                                                    <br />
-                                                                                </>
-                                                                            }
-                                                                        })
-                                                                    }
-                                                                </pre>
+                                                            <div class="logs-summary">
+                                                                <p>{ format!("{} log entries", item.logs.len()) }</p>
                                                             </div>
                                                         }
                                                     } else {

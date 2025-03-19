@@ -397,6 +397,7 @@ dependencies = [
  "lazy_static",
  "log",
  "oauth2",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",

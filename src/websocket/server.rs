@@ -103,13 +103,13 @@ impl WebSocketSession {
     fn broadcast_message(&self, message: &WsMessage) {
         // Create JSON string for broadcasting
         if let Ok(json) = serde_json::to_string(message) {
-            info!("Broadcasting message: {}", json);
+            debug!("Broadcasting message: {}", json);
             
             // Send message to all active sessions except self
             if let Ok(sessions) = ACTIVE_SESSIONS.lock() {
                 let client_count = sessions.len();
                 if client_count <= 1 {
-                    info!("No other clients to broadcast to");
+                    debug!("No other clients to broadcast to");
                     return;
                 }
                 
@@ -129,7 +129,7 @@ impl WebSocketSession {
                     }
                 }
                 
-                info!("Message broadcast directly to {} clients", broadcast_count);
+                debug!("Message broadcast directly to {} clients", broadcast_count);
             }
         }
     }
@@ -215,7 +215,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebSocketSession 
             }
             Ok(ws::Message::Text(text)) => {
                 // Log the incoming message for debugging
-                info!("Received text message: {}", text);
+                debug!("Received text message: {}", text);
                 
                 // Try to parse as a message
                 match serde_json::from_str::<WsMessage>(&text) {
@@ -272,20 +272,34 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebSocketSession 
 
 // Function to broadcast release updates to all connected clients
 pub fn broadcast_release_update(release_id: String, status: String, progress: f32, log_line: Option<String>) {
-    use log::{info, error};
-    // Use the local WsMessage, not from models
+    // Is this an error message?
+    let is_error = log_line.as_ref().map_or(false, |line| {
+        line.contains("ERROR") || line.contains("error") || line.contains("FAILED") || status == "Error"
+    });
     
     // Create update message
     let update = WsMessage::ReleaseUpdate {
         release_id: release_id.clone(),
-        status,
+        status: status.clone(),
         progress,
-        log_line,
+        log_line: log_line.clone(),
     };
     
     // Convert to JSON
     if let Ok(json) = serde_json::to_string(&update) {
-        info!("Broadcasting release update: {}", json);
+        // Only log detailed messages if it's an error or significant event (not every progress update)
+        if is_error || log_line.is_some() && !status.contains("Progress") {
+            info!("Broadcasting release update: {} - status: {}, progress: {:.1}%", 
+                release_id, status, progress);
+            
+            if let Some(line) = &log_line {
+                if is_error {
+                    error!("Release error: {}", line);
+                } else {
+                    info!("Release log: {}", line);
+                }
+            }
+        }
         
         // Send to all active sessions
         if let Ok(sessions) = ACTIVE_SESSIONS.lock() {
@@ -306,7 +320,7 @@ pub fn broadcast_release_update(release_id: String, status: String, progress: f3
                 broadcast_count += 1;
             }
             
-            info!("Release update broadcast to {} clients", broadcast_count);
+            debug!("Release update broadcast to {} clients", broadcast_count);
         }
     } else {
         error!("Failed to serialize release update");

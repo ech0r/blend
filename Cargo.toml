@@ -22,6 +22,7 @@ env_logger = "0.10"          # Logging configuration
 dotenv = "0.15"              # Environment configuration
 futures = "0.3"              # Async utilities
 lazy_static = "1.4"          # Lazy static initialization
+regex = "1.5"                # Regular expression support
 
 [workspace]
 members = [".", "frontend"]

@@ -2,6 +2,8 @@ use yew::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 use log::{info, error};
 use web_sys::console;
+use std::rc::Rc;
+use chrono::Utc;
 
 use crate::models::{Release, Client, User, WsMessage, Environment, ReleaseStatus};
 use crate::services::api::ApiClient;
@@ -10,6 +12,7 @@ use crate::components::kanban::KanbanBoard;
 use crate::components::header::Header;
 use crate::components::chat::ChatPanel;
 use crate::components::release_form::ReleaseForm;
+use crate::components::log_drawer::{LogDrawer, LogEntry};
 
 pub enum AppMsg {
     FetchReleases,
@@ -20,7 +23,7 @@ pub enum AppMsg {
     DeleteRelease(String),
     ReleaseDeleted(String),
     MoveRelease(String, Environment),
-    ClearRelease(String), // New message for clearing a release
+    ClearRelease(String),
     OpenReleaseForm,
     CloseReleaseForm,
     CreateRelease(Release),
@@ -29,6 +32,8 @@ pub enum AppMsg {
     WebSocketAction(WsAction),
     SendChatMessage(String),
     ToggleChatPanel,
+    OpenLogDrawer(String), // String is the release ID
+    CloseLogDrawer,
     Error(String),
 }
 
@@ -40,6 +45,9 @@ pub struct App {
     chat_messages: Vec<WsMessage>,
     show_release_form: bool,
     show_chat_panel: bool,
+    show_log_drawer: bool,
+    active_release_id: String,
+    logs: Vec<LogEntry>,
     error: Option<String>,
 }
 
@@ -57,6 +65,9 @@ impl Component for App {
             chat_messages: Vec::new(),
             show_release_form: false,
             show_chat_panel: false,
+            show_log_drawer: false,
+            active_release_id: String::new(),
+            logs: Vec::new(),
             error: None,
         };
         
@@ -151,7 +162,7 @@ impl Component for App {
                             target_env,
                             release.deployment_items.into_iter().map(|i| i.name).collect(),
                             release.scheduled_at,
-                            release.skip_staging, // Include the skip_staging flag
+                            release.skip_staging,
                         ).await {
                             Ok(updated) => link.send_message(AppMsg::ReleaseUpdated(updated)),
                             Err(e) => link.send_message(AppMsg::Error(format!("Failed to update release: {}", e))),
@@ -211,7 +222,7 @@ impl Component for App {
                         release.target_environment,
                         release.deployment_items.into_iter().map(|i| i.name).collect(),
                         release.scheduled_at,
-                        release.skip_staging, // Include the skip_staging flag
+                        release.skip_staging,
                     ).await {
                         Ok(created) => link.send_message(AppMsg::ReleaseCreated(created)),
                         Err(e) => link.send_message(AppMsg::Error(format!("Failed to create release: {}", e))),
@@ -267,34 +278,50 @@ impl Component for App {
                                     
                                     // Add log line if present
                                     if let Some(log) = log_line {
-                                        // Find the active deployment item and add log
-                                        // Create a regex to extract the item name from the log line
+                                        // Create a timestamp
+                                        let timestamp = Utc::now().format("%H:%M:%S").to_string();
+                                        
+                                        // Parse the log line to find the deployment item and if it's an error
                                         let log_line = log.clone();
                                         
-                                        // Parse the log line to find the deployment item
-                                        // Format is usually "[item_name] log message"
-                                        if let Some(start_idx) = log_line.find('[') {
+                                        // Determine if this is an error message
+                                        let is_error = log_line.contains("ERROR") || log_line.contains("FAILED") || status == "Error";
+                                        
+                                        // Extract the item name from the log line if possible
+                                        let item_name = if let Some(start_idx) = log_line.find('[') {
                                             if let Some(end_idx) = log_line.find(']') {
                                                 if start_idx < end_idx {
-                                                    let item_name = log_line[start_idx+1..end_idx].trim();
-                                                    
-                                                    // Find the deployment item with this name
-                                                    if let Some(item) = release.deployment_items.iter_mut()
-                                                        .find(|i| i.name == item_name) {
-                                                        item.logs.push(log_line.clone());
-                                                    } else {
-                                                        // If we can't find a specific item, add to all in-progress items
-                                                        for item in release.deployment_items.iter_mut()
-                                                            .filter(|i| matches!(i.status, ReleaseStatus::DeployingToStaging | ReleaseStatus::DeployingToProduction)) {
-                                                            item.logs.push(log_line.clone());
-                                                        }
-                                                    }
+                                                    log_line[start_idx+1..end_idx].trim().to_string()
+                                                } else {
+                                                    "unknown".to_string()
                                                 }
+                                            } else {
+                                                "unknown".to_string()
                                             }
                                         } else {
-                                            // If the format doesn't match, add to all items
-                                            for item in release.deployment_items.iter_mut() {
-                                                item.logs.push(log_line.clone());
+                                            "unknown".to_string()
+                                        };
+                                        
+                                        // Create a new log entry
+                                        let log_entry = LogEntry {
+                                            release_id: release_id.clone(),
+                                            item_name: item_name.clone(), // Clone here to avoid the moved value issue
+                                            content: log_line.clone(),
+                                            timestamp,
+                                            is_error,
+                                        };
+                                        
+                                        // Add to global logs
+                                        self.logs.push(log_entry);
+                                        
+                                        // Find the deployment item with this name
+                                        if let Some(item) = release.deployment_items.iter_mut()
+                                            .find(|i| i.name == item_name) {
+                                            item.logs.push(log_line.clone());
+                                            
+                                            // Set error if this is an error message
+                                            if is_error && item.error.is_none() {
+                                                item.error = Some(log_line.clone());
                                             }
                                         }
                                     }
@@ -357,6 +384,15 @@ impl Component for App {
                 self.show_chat_panel = !self.show_chat_panel;
                 true
             }
+            AppMsg::OpenLogDrawer(release_id) => {
+                self.show_log_drawer = true;
+                self.active_release_id = release_id;
+                true
+            }
+            AppMsg::CloseLogDrawer => {
+                self.show_log_drawer = false;
+                true
+            }
             AppMsg::Error(error) => {
                 self.error = Some(error);
                 true
@@ -366,7 +402,13 @@ impl Component for App {
     
     fn view(&self, ctx: &Context<Self>) -> Html {        
         let is_connected = self.ws_service.as_ref().map(|ws| ws.is_connected()).unwrap_or(false);
-        info!("Viewing App!");
+        
+        // Find the active release if log drawer is open
+        let active_release = if self.show_log_drawer {
+            self.releases.iter().find(|r| r.id.to_string() == self.active_release_id)
+        } else {
+            None
+        };
         
         html! {
             <div class="app-container">
@@ -379,10 +421,11 @@ impl Component for App {
                 
                 <main class="main-content">
                     <KanbanBoard 
-                        releases={self.releases.clone()} // Pass all releases, not splitting by environment
+                        releases={self.releases.clone()}
                         on_move_release={ctx.link().callback(|(id, env)| AppMsg::MoveRelease(id, env))}
-                        on_clear_release={ctx.link().callback(AppMsg::ClearRelease)} // Add clear callback
+                        on_clear_release={ctx.link().callback(AppMsg::ClearRelease)}
                         on_delete_release={ctx.link().callback(AppMsg::DeleteRelease)}
+                        on_view_logs={ctx.link().callback(AppMsg::OpenLogDrawer)}
                     />
                     
                     {
@@ -418,9 +461,26 @@ impl Component for App {
                 }
                 
                 {
+                    // Log drawer - only show if a release is selected
+                    if self.show_log_drawer && active_release.is_some() {
+                        let release = active_release.unwrap();
+                        html! {
+                            <LogDrawer
+                                visible={self.show_log_drawer}
+                                logs={Rc::new(self.logs.clone())}
+                                release_id={self.active_release_id.clone()}
+                                release_title={release.title.clone()}
+                                on_close={ctx.link().callback(|_| AppMsg::CloseLogDrawer)}
+                            />
+                        }
+                    } else {
+                        html! {}
+                    }
+                }
+                
+                {
                     // Release form modal
                     if self.show_release_form {
-                        info!("showing release form!");
                         html! {
                             <div class="modal-overlay">
                                 <div class="modal-container">

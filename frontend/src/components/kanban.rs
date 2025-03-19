@@ -5,10 +5,11 @@ use super::release_card::ReleaseCard;
 
 #[derive(Properties, PartialEq)]
 pub struct KanbanBoardProps {
-    pub releases: Vec<Release>, // All releases, not separated by environment
+    pub releases: Vec<Release>,
     pub on_move_release: Callback<(String, Environment)>,
-    pub on_clear_release: Callback<String>, // Add a callback specifically for clearing
+    pub on_clear_release: Callback<String>,
     pub on_delete_release: Callback<String>,
+    pub on_view_logs: Callback<String>, // Changed to match App's callback type - just the release ID
 }
 
 #[function_component(KanbanBoard)]
@@ -29,6 +30,13 @@ pub fn kanban_board(props: &KanbanBoardProps) -> Html {
     
     let on_clear = {
         let callback = props.on_clear_release.clone();
+        Callback::from(move |id: String| {
+            callback.emit(id);
+        })
+    };
+    
+    let on_view_logs = {
+        let callback = props.on_view_logs.clone();
         Callback::from(move |id: String| {
             callback.emit(id);
         })
@@ -111,6 +119,7 @@ pub fn kanban_board(props: &KanbanBoardProps) -> Html {
                                     on_delete={on_delete.clone()}
                                     on_move={on_move.clone()}
                                     on_clear={on_clear.clone()}
+                                    on_view_logs={on_view_logs.clone()}
                                 />
                             }
                         }).collect::<Html>()
@@ -137,6 +146,7 @@ pub fn kanban_board(props: &KanbanBoardProps) -> Html {
                                     on_delete={on_delete.clone()}
                                     on_move={on_move.clone()}
                                     on_clear={on_clear.clone()}
+                                    on_view_logs={on_view_logs.clone()}
                                 />
                             }
                         }).collect::<Html>()
@@ -163,6 +173,7 @@ pub fn kanban_board(props: &KanbanBoardProps) -> Html {
                                     on_delete={on_delete.clone()}
                                     on_move={on_move.clone()}
                                     on_clear={on_clear.clone()}
+                                    on_view_logs={on_view_logs.clone()}
                                 />
                             }
                         }).collect::<Html>()
