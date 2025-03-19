@@ -366,6 +366,7 @@ impl Component for App {
     
     fn view(&self, ctx: &Context<Self>) -> Html {        
         let is_connected = self.ws_service.as_ref().map(|ws| ws.is_connected()).unwrap_or(false);
+        info!("Viewing App!");
         
         html! {
             <div class="app-container">

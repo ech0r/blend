@@ -143,14 +143,16 @@ async fn process_release(release_id: uuid::Uuid, db: web::Data<SledStorage>) -> 
             // Get the release again to avoid conflicts
             let db_ref = db_clone.as_ref();
             if let Ok(Some(mut updated_release)) = db_ref.get_release(&release_id) {
+                // Calculate the next status first, before borrowing mutably
+                let next_status = updated_release.next_status_after_deployment();
+                
                 // Find the right deployment item
                 if let Some(deployment_item) = updated_release.deployment_items.iter_mut().find(|it| it.name == item_name) {
                     if let Err(e) = &result {
                         deployment_item.status = ReleaseStatus::Error;
                         deployment_item.error = Some(e.to_string());
                     } else {
-                        // Get the next status before modifying the item
-                        let next_status = updated_release.next_status_after_deployment();
+                        // Use the pre-calculated next status
                         deployment_item.status = next_status;
                     }
                     
