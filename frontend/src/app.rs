@@ -411,7 +411,7 @@ impl Component for App {
                             link.send_message(AppMsg::ConnectWebSocket);
                         });
                         // Reduced from 5000ms to 1000ms (1 second)
-                        gloo_timers::callback::Timeout::new(1_000, callback).forget();
+                        gloo_timers::callback::Timeout::new(100, callback).forget();
                         
                         // Show reconnecting message
                         self.error = Some("WebSocket disconnected. Reconnecting...".to_string());
@@ -429,7 +429,7 @@ impl Component for App {
                             link.send_message(AppMsg::ConnectWebSocket);
                         });
                         // Reduced from 5000ms to 1000ms (1 second)
-                        gloo_timers::callback::Timeout::new(1_000, callback).forget();
+                        gloo_timers::callback::Timeout::new(100, callback).forget();
                         
                         return true;
                     }
