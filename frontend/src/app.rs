@@ -257,34 +257,15 @@ impl Component for App {
                 false
             }
             AppMsg::ClearRelease(release_id) => {
-                // Find the release
-                if let Some(release) = self.releases.iter().find(|r| r.id == release_id) {
-                    let mut release = release.clone();
-                    
-                    // Determine next status based on current status and skip_staging flag
-                    if let Some(next_status) = release.next_status() {
-                        release.status = next_status;
-                        
-                        // Update the release through API
-                        let link = ctx.link().clone();
-                        spawn_local(async move {
-                            match ApiClient::update_release(
-                                &release.id,
-                                release.title,
-                                release.client_id,
-                                release.current_environment,
-                                release.target_environment,
-                                release.deployment_items.into_iter().map(|i| i.name).collect(),
-                                release.scheduled_at,
-                                release.skip_staging,
-                            ).await {
-                                Ok(updated) => link.send_message(AppMsg::ReleaseUpdated(updated)),
-                                Err(e) => link.send_message(AppMsg::Error(format!("Failed to clear release: {}", e))),
-                            }
-                        });
+                // Instead of updating the entire release, just call the status update endpoint directly
+                let link = ctx.link().clone();
+                spawn_local(async move {
+                    match ApiClient::update_release_status(&release_id, "clear").await {
+                        Ok(updated) => link.send_message(AppMsg::ReleaseUpdated(updated)),
+                        Err(e) => link.send_message(AppMsg::Error(format!("Failed to clear release: {}", e))),
                     }
-                }
-                
+                });
+
                 false
             }
             AppMsg::OpenReleaseForm => {

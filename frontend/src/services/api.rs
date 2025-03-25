@@ -134,7 +134,33 @@ impl ApiClient {
                 "Unknown error creating release".to_string()))),
         }
     }
-    
+    pub async fn update_release_status(
+        id: &str, 
+        status: &str
+    ) -> Result<Release, ApiError> {
+        let url = format!("{}/releases/{}/status", API_URL, id);
+
+        let status_update = serde_json::json!({
+            "status": status
+        });
+
+        let response = Request::put(&url)
+            .json(&status_update)?
+            .send()
+            .await?;
+
+        if !response.ok() {
+            return Err(ApiError::ApiError(format!("API error: {}", response.status())));
+        }
+
+        let response: ApiResponse<Release> = response.json().await?;
+
+        match response.data {
+            Some(release) => Ok(release),
+            None => Err(ApiError::ApiError(response.message.unwrap_or_else(|| 
+                        "Unknown error updating release status".to_string()))),
+        }
+    }
     // Update a release
     pub async fn update_release(
         id: &str,

@@ -146,12 +146,19 @@ async fn process_release(release_id: uuid::Uuid, db: web::Data<SledStorage>) -> 
         let db_clone = db.clone();
         let env_name = env_name.to_string();
         
-        // Update progress and broadcast
+        // Broadcast final status
+        let status_str = match release.status {
+            ReleaseStatus::ReadyToTestInStaging => "ReadyToTestInStaging".to_owned(),
+            ReleaseStatus::ReadyToTestInProduction => "ReadyToTestInProduction".to_owned(),
+            ReleaseStatus::Error => "Error".to_owned(),
+            _ => format!("{:?}", release.status),
+        };
+
         broadcast_release_update(
-            release_id_str.clone(),
-            format!("{:?}", release.status), 
-            0.0, 
-            Some(format!("Starting {} deployment in {}", item_name, env_name))
+            release.id.to_string(),
+            status_str, 
+            release.progress, 
+            Some(format!("Deployment process complete for {}", release.title))
         );
         
         // Run in a separate task
@@ -352,10 +359,16 @@ async fn process_deployment_item(item_name: &str, env_name: &str, release_id: St
         return Err(error_message.into());
     }
     
-    // Announce completion
+    // Announce completion with the correct status for the frontend to understand
+    let status_str = match env_name {
+        "staging" => "ReadyToTestInStaging",
+        "production" => "ReadyToTestInProduction",
+        _ => "Completed",
+    };
+
     broadcast_release_update(
         release_id.clone(),
-        "Completed".to_string(), 
+        status_str.to_string(), 
         100.0, 
         Some(format!("{} deployment to {} completed successfully", item_name, env_name))
     );

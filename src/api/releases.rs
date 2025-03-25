@@ -386,6 +386,7 @@ async fn update_release_status(
     
     // Get the next status based on current and skip_staging flag
     if status_str == "clear" {
+        // Use release.next_status_when_cleared() instead of calling it on the status
         if let Some(next_status) = release.next_status_when_cleared() {
             release.status = next_status;
         } else {
@@ -417,7 +418,7 @@ async fn update_release_status(
             }
         };
     }
-    
+
     // Save the updated release
     match db.save_release(&release) {
         Ok(_) => {
