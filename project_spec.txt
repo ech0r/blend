@@ -34,6 +34,4 @@ Create a software release management tool that meets the following requirements 
 
 Progress:
 
-We have a working dashboard that is styled correctly, we just need to button up some functionality with the releases and the backend functions. The purpose of the backend is to run various bash scripts and stream their output to the front-end, both STDOUT and STDERR, we want to also collect the exit codes from these processes and figure out if the exited successfully. Based on that we want to update the progress bars on the release cards and find a nice way to display the output from the scripts, they can be quite verbose. 
-
-I want the Dismiss button in the main frontend to slide away and disappear with when the user presses Dismiss, I also want the messages to disappear after a few seconds. I'd like there to be button in the header the toggles the application log that collects these notifications. The little banner that appears at the bottom is great, lets keep that for errors but add a differently styled one for Info notifications. I'd like it to be exactly the same but a different color, maybe green or blue.
+We are looking good so far, right now it appears the role based user management portion is not working correctly, ech0r is still being logged in as a viewer, despite being an admin in the .users file. Please fix.
