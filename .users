@@ -1,0 +1,17 @@
+# Blend Release Manager Users File
+# Format: username:role
+# Role can be: viewer, deployer, admin
+
+# Admins can deploy to development, staging, and production
+admin:admin
+johnsmith:admin
+ech0r:admin
+
+# Deployers can deploy to development and staging only
+janedoe:deployer
+devteam:deployer
+deployer:deployer
+
+# Viewers can only view releases but not modify them
+qauser:viewer
+viewer:viewer

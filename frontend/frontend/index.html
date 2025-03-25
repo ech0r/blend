@@ -10,7 +10,94 @@
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         /* Neobrutalist styling for Blend Release Manager */
+	/* User info styling with role badge */
+	.user-info {
+	    display: flex;
+	    align-items: center;
+	    gap: 10px;
+	}
 
+	.user-info .avatar {
+	    width: 32px;
+	    height: 32px;
+	    border-radius: 50%;
+	    border: 2px solid var(--color-dark);
+	}
+
+	.user-info .username {
+	    font-weight: 600;
+	}
+
+	.user-info .user-role {
+	    background-color: var(--color-dark);
+	    color: var(--color-light);
+	    font-size: 0.8rem;
+	    padding: 2px 6px;
+	    border-radius: 4px;
+	    font-weight: 500;
+	}
+
+	/* Role colors */
+	.user-info .user-role.admin {
+	    background-color: var(--color-primary);
+	}
+
+	.user-info .user-role.deployer {
+	    background-color: var(--color-tertiary);
+	}
+
+	.user-info .user-role.viewer {
+	    background-color: var(--color-secondary);
+	}
+
+	/* Info notification (similar to error but with different color) */
+	.info-notification {
+	    position: fixed;
+	    bottom: 2rem;
+	    right: 2rem;
+	    background-color: var(--color-secondary);
+	    color: var(--color-dark);
+	    padding: 1rem;
+	    border: var(--border-thickness) solid var(--color-dark);
+	    box-shadow: var(--shadow-offset) var(--shadow-offset) 0 var(--color-dark);
+	    display: flex;
+	    align-items: center;
+	    justify-content: space-between;
+	    max-width: 400px;
+	    z-index: 1000;
+	    animation: slideIn 0.3s ease-out;
+	}
+
+	.info-notification button {
+	    background: none;
+	    border: none;
+	    color: var(--color-dark);
+	    cursor: pointer;
+	    font-weight: bold;
+	    margin-left: 1rem;
+	    box-shadow: none;
+	}
+
+	.info-notification button:hover {
+	    transform: none;
+	    box-shadow: none;
+	    text-decoration: underline;
+	}
+
+	/* Animation for dismissing notifications */
+	@keyframes slideOut {
+	    from { transform: translateX(0); opacity: 1; }
+	    to { transform: translateX(100%); opacity: 0; }
+	}
+
+	.notification-dismissing {
+	    animation: slideOut 0.3s ease-out forwards;
+	}
+
+/* Toggle log button */
+.toggle-log-btn {
+    background-color: var(--color-tertiary);
+}
 	/* Info notification (similar to error but with different color) */
 	.info-notification {
 	    position: fixed;

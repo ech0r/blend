@@ -1,15 +1,16 @@
 use yew::prelude::*;
 use web_sys::{DragEvent, DataTransfer};
-use crate::models::{Release, Environment, ReleaseStatus};
+use crate::models::{Release, Environment, ReleaseStatus, User, UserRole};
 use super::release_card::ReleaseCard;
 
 #[derive(Properties, PartialEq)]
 pub struct KanbanBoardProps {
     pub releases: Vec<Release>,
+    pub current_user: Option<User>, // Add current user
     pub on_move_release: Callback<(String, Environment)>,
     pub on_clear_release: Callback<String>,
     pub on_delete_release: Callback<String>,
-    pub on_view_logs: Callback<String>, // Changed to match App's callback type - just the release ID
+    pub on_view_logs: Callback<String>,
 }
 
 #[function_component(KanbanBoard)]
@@ -46,10 +47,21 @@ pub fn kanban_board(props: &KanbanBoardProps) -> Html {
         event.prevent_default();
     });
     
+    // Add permission checks for drag and drop
+    let can_deploy_to_staging = props.current_user.as_ref()
+        .map(|user| user.can_deploy_to_staging())
+        .unwrap_or(false);
+        
+    let can_deploy_to_production = props.current_user.as_ref()
+        .map(|user| user.can_deploy_to_production())
+        .unwrap_or(false);
+    
+    // Only allow drops if user has permissions
     let on_dev_drop = {
         let callback = props.on_move_release.clone();
         Callback::from(move |event: DragEvent| {
             event.prevent_default();
+            // Always allowed to move to dev
             if let Some(data) = event.data_transfer() {
                 if let Ok(id) = data.get_data("text/plain") {
                     callback.emit((id, Environment::Development));
@@ -60,11 +72,15 @@ pub fn kanban_board(props: &KanbanBoardProps) -> Html {
     
     let on_staging_drop = {
         let callback = props.on_move_release.clone();
+        let can_deploy = can_deploy_to_staging;
         Callback::from(move |event: DragEvent| {
             event.prevent_default();
-            if let Some(data) = event.data_transfer() {
-                if let Ok(id) = data.get_data("text/plain") {
-                    callback.emit((id, Environment::Staging));
+            // Only if user can deploy to staging
+            if can_deploy {
+                if let Some(data) = event.data_transfer() {
+                    if let Ok(id) = data.get_data("text/plain") {
+                        callback.emit((id, Environment::Staging));
+                    }
                 }
             }
         })
@@ -72,11 +88,15 @@ pub fn kanban_board(props: &KanbanBoardProps) -> Html {
     
     let on_prod_drop = {
         let callback = props.on_move_release.clone();
+        let can_deploy = can_deploy_to_production;
         Callback::from(move |event: DragEvent| {
             event.prevent_default();
-            if let Some(data) = event.data_transfer() {
-                if let Ok(id) = data.get_data("text/plain") {
-                    callback.emit((id, Environment::Production));
+            // Only if user can deploy to production
+            if can_deploy {
+                if let Some(data) = event.data_transfer() {
+                    if let Ok(id) = data.get_data("text/plain") {
+                        callback.emit((id, Environment::Production));
+                    }
                 }
             }
         })
@@ -116,6 +136,7 @@ pub fn kanban_board(props: &KanbanBoardProps) -> Html {
                             html! {
                                 <ReleaseCard 
                                     release={release.clone()}
+                                    current_user={props.current_user.clone()}
                                     on_delete={on_delete.clone()}
                                     on_move={on_move.clone()}
                                     on_clear={on_clear.clone()}
@@ -143,6 +164,7 @@ pub fn kanban_board(props: &KanbanBoardProps) -> Html {
                             html! {
                                 <ReleaseCard 
                                     release={release.clone()}
+                                    current_user={props.current_user.clone()}
                                     on_delete={on_delete.clone()}
                                     on_move={on_move.clone()}
                                     on_clear={on_clear.clone()}
@@ -170,6 +192,7 @@ pub fn kanban_board(props: &KanbanBoardProps) -> Html {
                             html! {
                                 <ReleaseCard 
                                     release={release.clone()}
+                                    current_user={props.current_user.clone()}
                                     on_delete={on_delete.clone()}
                                     on_move={on_move.clone()}
                                     on_clear={on_clear.clone()}

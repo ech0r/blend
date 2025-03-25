@@ -1,7 +1,7 @@
-use actix_web::{web, HttpResponse, Responder, get};
+use actix_web::{web, HttpResponse, Responder, get, HttpRequest};
 use crate::storage::SledStorage;
 use crate::models::User;
-use log::error;
+use log::{error, debug};
 
 #[get("")]
 async fn get_users(db: web::Data<SledStorage>) -> impl Responder {
@@ -23,10 +23,52 @@ async fn get_users(db: web::Data<SledStorage>) -> impl Responder {
 }
 
 #[get("/me")]
-async fn get_current_user(_db: web::Data<SledStorage>) -> impl Responder {
-    // In a real implementation, we would get the user ID from the session
-    // and then fetch the user from the database
-    HttpResponse::Ok().body("Current user info")
+async fn get_current_user(
+    req: HttpRequest,
+    db: web::Data<SledStorage>,
+) -> impl Responder {
+    // Get session cookie
+    if let Some(cookie) = req.cookie("session_id") {
+        let session_id = cookie.value();
+        
+        // Get user ID from session
+        match db.get_session(session_id) {
+            Ok(Some(user_id)) => {
+                // Get user from database
+                match db.get_user(&user_id) {
+                    Ok(Some(user)) => {
+                        // Create sanitized user (without access token)
+                        let sanitized_user = User {
+                            id: user.id,
+                            username: user.username,
+                            avatar_url: user.avatar_url,
+                            access_token: String::new(), // Don't expose token
+                            role: user.role,
+                        };
+                        
+                        return HttpResponse::Ok().json(sanitized_user);
+                    }
+                    Ok(None) => {
+                        error!("Session exists but user not found: {}", user_id);
+                    }
+                    Err(e) => {
+                        error!("Error fetching user from session: {}", e);
+                    }
+                }
+            }
+            Ok(None) => {
+                debug!("No session found for id: {}", session_id);
+            }
+            Err(e) => {
+                error!("Error fetching session: {}", e);
+            }
+        }
+    }
+    
+    // If we get here, there's no valid session
+    HttpResponse::Unauthorized().json(serde_json::json!({
+        "error": "Not authenticated"
+    }))
 }
 
 pub fn configure(cfg: &mut web::ServiceConfig) {

@@ -1,21 +1,44 @@
 use yew::prelude::*;
-use crate::models::{Release, Environment, ReleaseStatus};
+use crate::models::{Release, Environment, ReleaseStatus, User, UserRole};
 use web_sys::{DragEvent, DataTransfer};
 use wasm_bindgen::JsCast;
 
 #[derive(Properties, PartialEq)]
 pub struct ReleaseCardProps {
     pub release: Release,
+    pub current_user: Option<User>, // Add current user
     pub on_delete: Callback<String>,
     pub on_move: Callback<(String, Environment)>,
     pub on_clear: Callback<String>,
-    pub on_view_logs: Callback<String>, // This matches the callback in kanban.rs
+    pub on_view_logs: Callback<String>,
 }
 
 #[function_component(ReleaseCard)]
 pub fn release_card(props: &ReleaseCardProps) -> Html {
     let release = &props.release;
     let show_details = use_state(|| false);
+    
+    // Determine permissions based on user role
+    let can_deploy_to_staging = props.current_user.as_ref()
+        .map(|user| user.can_deploy_to_staging())
+        .unwrap_or(false);
+        
+    let can_deploy_to_production = props.current_user.as_ref()
+        .map(|user| user.can_deploy_to_production())
+        .unwrap_or(false);
+    
+    // Check if this card can be cleared based on both release status and user permissions
+    let can_be_cleared = release.can_be_cleared() && match release.status {
+        ReleaseStatus::InDevelopment => can_deploy_to_staging,
+        ReleaseStatus::ReadyToTestInStaging => can_deploy_to_production,
+        ReleaseStatus::ReadyToTestInProduction => can_deploy_to_production,
+        _ => false,
+    };
+    
+    // Check if delete is allowed (admin only)
+    let can_delete = props.current_user.as_ref()
+        .map(|user| matches!(user.role, UserRole::Admin))
+        .unwrap_or(false);
     
     let on_details_click = {
         let show_details = show_details.clone();
@@ -63,11 +86,7 @@ pub fn release_card(props: &ReleaseCardProps) -> Html {
     let status_class = release.status.css_class();
     let status_display = release.status.display_name();
     
-    // Determine if "Clear & Move" button should be shown
-    let can_be_cleared = release.can_be_cleared();
-    
     // Check if there are any logs for this release
-    //let has_logs = release.deployment_items.iter().any(|item| !item.logs.is_empty());
     let has_logs = true;
     
     html! {
@@ -106,7 +125,7 @@ pub fn release_card(props: &ReleaseCardProps) -> Html {
                 </button>
                 
                 {
-                    // Only show clear button if release can be cleared
+                    // Only show clear button if release can be cleared AND user has permission
                     if can_be_cleared {
                         let next_status = release.next_status();
                         let button_text = match next_status {
@@ -127,7 +146,7 @@ pub fn release_card(props: &ReleaseCardProps) -> Html {
                 }
                 
                 {
-                    // View logs button - always visible if there are any logs
+                    // View logs button - always visible
                     if has_logs {
                         html! {
                             <button class="logs-btn" onclick={on_view_logs}>
@@ -139,9 +158,18 @@ pub fn release_card(props: &ReleaseCardProps) -> Html {
                     }
                 }
                 
-                <button class="delete-btn" onclick={on_delete}>
-                    { "Delete" }
-                </button>
+                {
+                    // Delete button - only for admins
+                    if can_delete {
+                        html! {
+                            <button class="delete-btn" onclick={on_delete}>
+                                { "Delete" }
+                            </button>
+                        }
+                    } else {
+                        html! {}
+                    }
+                }
             </div>
             
             {

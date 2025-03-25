@@ -36,7 +36,6 @@ pub enum AppMsg {
     CloseLogDrawer,
     Error(String),
     Info(String),
-    // New message types
     DismissError,
     DismissInfo,
     AutoDismissError,
@@ -57,10 +56,8 @@ pub struct App {
     logs: Vec<LogEntry>,
     error: Option<String>,
     info: Option<String>,
-    // New fields for notification animations
     error_dismissing: bool,
     info_dismissing: bool,
-    // New field for application log
     show_app_log: bool,
 }
 
@@ -83,7 +80,6 @@ impl Component for App {
             logs: Vec::new(),
             error: None,
             info: None,
-            // Initialize new fields
             error_dismissing: false,
             info_dismissing: false,
             show_app_log: false,
@@ -98,7 +94,6 @@ impl Component for App {
     
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
-            // Add these handlers to the match statement in the update method
             AppMsg::DismissError => {
                 self.error_dismissing = true;
 
@@ -140,7 +135,6 @@ impl Component for App {
                 }
                 true
             }
-            // Modify existing Error and Info handlers to auto-dismiss after 5 seconds
             AppMsg::Error(error) => {
                 self.error = Some(error);
                 self.error_dismissing = false;
@@ -290,7 +284,10 @@ impl Component for App {
                         release.scheduled_at,
                         release.skip_staging,
                     ).await {
-                        Ok(created) => link.send_message(AppMsg::ReleaseCreated(created)),
+                        Ok(created) => {
+                            link.send_message(AppMsg::ReleaseCreated(created));
+                            link.send_message(AppMsg::Info("Release successfully created!".to_string()));
+                        },
                         Err(e) => link.send_message(AppMsg::Error(format!("Failed to create release: {}", e))),
                     }
                 });
@@ -471,25 +468,25 @@ impl Component for App {
         
         // Find the active release if log drawer is open
         let active_release = if self.show_log_drawer {
-            self.releases.iter().find(|r| r.id.to_string() == self.active_release_id)
+            self.releases.iter().find(|r| r.id == self.active_release_id)
         } else {
             None
         };
         
         html! {
             <div class="app-container">
-                // Replace the existing Header usage in the App's view method:
                 <Header 
                     user={self.current_user.clone()}
                     on_new_release={ctx.link().callback(|_| AppMsg::OpenReleaseForm)}
                     on_toggle_chat={ctx.link().callback(|_| AppMsg::ToggleChatPanel)}
-                    on_toggle_log={ctx.link().callback(|_| AppMsg::ToggleAppLog)} // New callback
+                    on_toggle_log={ctx.link().callback(|_| AppMsg::ToggleAppLog)}
                     is_connected={is_connected}
                 />
 
                 <main class="main-content">
                     <KanbanBoard 
                         releases={self.releases.clone()}
+                        current_user={self.current_user.clone()}
                         on_move_release={ctx.link().callback(|(id, env)| AppMsg::MoveRelease(id, env))}
                         on_clear_release={ctx.link().callback(AppMsg::ClearRelease)}
                         on_delete_release={ctx.link().callback(AppMsg::DeleteRelease)}
@@ -510,9 +507,8 @@ impl Component for App {
                     }
                 </main>
                 
-
+                // Info notification
                 {
-                    // Info notification
                     if let Some(info) = &self.info {
                         let info_class = if self.info_dismissing {
                             "info-notification notification-dismissing"
@@ -524,18 +520,19 @@ impl Component for App {
                             <div class={info_class}>
                                 <p>{ info }</p>
                                 <button
-                                onclick={ctx.link().callback(|_| AppMsg::DismissInfo)}
-                            >
-                            { "Dismiss" }
-                            </button>
-                                </div>
+                                    onclick={ctx.link().callback(|_| AppMsg::DismissInfo)}
+                                >
+                                    { "Dismiss" }
+                                </button>
+                            </div>
                         }
                     } else {
                         html! {}
                     }
                 }
+                
+                // Error notification
                 {
-                    // Error notification
                     if let Some(error) = &self.error {
                         let error_class = if self.error_dismissing {
                             "error-notification notification-dismissing"
@@ -547,20 +544,19 @@ impl Component for App {
                             <div class={error_class}>
                                 <p>{ error }</p>
                                 <button
-                                onclick={ctx.link().callback(|_| AppMsg::DismissError)}
-                            >
-                            { "Dismiss" }
-                            </button>
-                                </div>
+                                    onclick={ctx.link().callback(|_| AppMsg::DismissError)}
+                                >
+                                    { "Dismiss" }
+                                </button>
+                            </div>
                         }
                     } else {
                         html! {}
                     }
                 }
 
-                // Add this for the app log
+                // App log drawer
                 {
-                    // App log drawer - reusing the existing LogDrawer component
                     if self.show_app_log {
                         html! {
                             <LogDrawer
@@ -577,8 +573,8 @@ impl Component for App {
                     }
                 }
 
+                // Release log drawer
                 {
-                    // Log drawer - only show if a release is selected
                     if self.show_log_drawer && active_release.is_some() {
                         let release = active_release.unwrap();
                         html! {
@@ -596,8 +592,8 @@ impl Component for App {
                     }
                 }
                 
+                // Release form modal
                 {
-                    // Release form modal
                     if self.show_release_form {
                         html! {
                             <div class="modal-overlay">
@@ -606,7 +602,7 @@ impl Component for App {
                                         clients={self.clients.clone()}
                                         on_submit={ctx.link().callback(AppMsg::CreateRelease)}
                                         on_cancel={ctx.link().callback(|_| AppMsg::CloseReleaseForm)}
-                                        on_create={ctx.link().callback(|s: String| AppMsg::Info(s))}
+                                        on_create={ctx.link().callback(|s| AppMsg::Info(s))}
                                     />
                                 </div>
                             </div>

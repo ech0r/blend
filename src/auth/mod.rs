@@ -1,4 +1,5 @@
 pub mod github;
+pub mod users_file_embed;
 
 use actix_web::web;
 

@@ -7,9 +7,10 @@ use oauth2::{
 use serde::{Deserialize, Serialize};
 use std::env;
 use uuid::Uuid;
-use crate::models::User;
+use crate::models::{User, user::UserRole};
 use crate::storage::SledStorage;
-use log::{info, error};
+use crate::auth::users_file_embed::ALLOWED_USERS;
+use log::{info, error, warn};
 use reqwest::Client as HttpClient;
 
 #[derive(Debug, Deserialize)]
@@ -114,7 +115,6 @@ async fn github_callback(
         
     let github_user = match github_user_response {
         Ok(response) => {
-            // First check and store the status
             let status = response.status();
             if !status.is_success() {
                 let error_text = response.text().await.unwrap_or_default();
@@ -122,21 +122,12 @@ async fn github_callback(
                 return HttpResponse::InternalServerError().body(format!("GitHub API error: {}", status));
             }
             
-            // For debugging, let's log the raw response
-            if let Ok(text) = response.text().await {
-                info!("GitHub response: {}", text);
-                
-                // Try to parse the text directly
-                match serde_json::from_str::<GithubUser>(&text) {
-                    Ok(user) => user,
-                    Err(e) => {
-                        error!("Failed to parse GitHub user: {}", e);
-                        return HttpResponse::InternalServerError().body(format!("Failed to parse GitHub user: {}", e));
-                    }
+            match response.json::<GithubUser>().await {
+                Ok(user) => user,
+                Err(e) => {
+                    error!("Failed to parse GitHub user: {}", e);
+                    return HttpResponse::InternalServerError().body(format!("Failed to parse GitHub user: {}", e));
                 }
-            } else {
-                error!("Failed to get response text from GitHub");
-                return HttpResponse::InternalServerError().body("Failed to get response text from GitHub");
             }
         },
         Err(e) => {
@@ -145,12 +136,35 @@ async fn github_callback(
         }
     };
     
-    // Create user in our system
+    // Check if user is allowed
+    let username = github_user.login.to_lowercase();
+
+    // Log username details to debug
+    info!("Checking permissions for GitHub user: '{}' (ID: {})", username, github_user.id);
+
+    let role = match ALLOWED_USERS.get_role(&username) {
+        Some(role) => {
+            info!("User {} is allowed with role {:?}", username, role);
+            role
+        },
+        None => {
+            warn!("User {} is not in the allowed users list", username);
+            // Option 1: Reject the login
+            //return HttpResponse::Forbidden().body("You are not authorized to use this application");
+            
+            // Option 2: Allow with viewer role (uncomment to use this approach)
+             info!("Assigning viewer role to user {}", username);
+             UserRole::Viewer
+        }
+    };
+    
+    // Create user in our system with role
     let user = User {
         id: github_user.id.to_string(),
         username: github_user.login,
         avatar_url: github_user.avatar_url,
         access_token: access_token.clone(),
+        role, // Add role information
     };
     
     // Save user to storage

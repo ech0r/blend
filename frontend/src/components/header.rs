@@ -1,12 +1,12 @@
 use yew::prelude::*;
-use crate::models::User;
+use crate::models::{User, UserRole};
 
 #[derive(Properties, PartialEq)]
 pub struct HeaderProps {
     pub user: Option<User>,
     pub on_new_release: Callback<()>,
     pub on_toggle_chat: Callback<()>,
-    pub on_toggle_log: Callback<()>, // New property
+    pub on_toggle_log: Callback<()>,
     pub is_connected: bool,
 }
 
@@ -26,12 +26,28 @@ pub fn header(props: &HeaderProps) -> Html {
         })
     };
     
-    // Add handler for the new button
     let on_toggle_log = {
         let callback = props.on_toggle_log.clone();
         Callback::from(move |_| {
             callback.emit(());
         })
+    };
+    
+    // Get role display name and CSS class
+    let get_role_display = |role: &UserRole| -> &'static str {
+        match role {
+            UserRole::Admin => "Admin",
+            UserRole::Deployer => "Deployer",
+            UserRole::Viewer => "Viewer",
+        }
+    };
+
+    let get_role_class = |role: &UserRole| -> &'static str {
+        match role {
+            UserRole::Admin => "admin",
+            UserRole::Deployer => "deployer",
+            UserRole::Viewer => "viewer",
+        }
     };
     
     html! {
@@ -51,12 +67,25 @@ pub fn header(props: &HeaderProps) -> Html {
             </div>
             
             <div class="actions">
-                <button 
-                    class="new-release-btn"
-                    onclick={on_new_release}
-                >
-                    { "New Release" }
-                </button>
+                // Only show new release button for non-viewers
+                {
+                    if let Some(user) = &props.user {
+                        if !matches!(user.role, UserRole::Viewer) {
+                            html! {
+                                <button 
+                                    class="new-release-btn"
+                                    onclick={on_new_release}
+                                >
+                                    { "New Release" }
+                                </button>
+                            }
+                        } else {
+                            html! {}
+                        }
+                    } else {
+                        html! {}
+                    }
+                }
                 
                 <button 
                     class="toggle-chat-btn"
@@ -65,7 +94,6 @@ pub fn header(props: &HeaderProps) -> Html {
                     { "Toggle Chat" }
                 </button>
                 
-                // Add new button
                 <button 
                     class="toggle-log-btn"
                     onclick={on_toggle_log}
@@ -77,10 +105,12 @@ pub fn header(props: &HeaderProps) -> Html {
             <div class="user-info">
                 {
                     if let Some(user) = &props.user {
+                        let role_class = format!("user-role {}", get_role_class(&user.role));
                         html! {
                             <>
                                 <img src={user.avatar_url.clone()} alt="Avatar" class="avatar" />
                                 <span class="username">{ &user.username }</span>
+                                <span class={role_class}>{ format!("({})", get_role_display(&user.role)) }</span>
                             </>
                         }
                     } else {
