@@ -32,10 +32,16 @@ pub enum AppMsg {
     WebSocketAction(WsAction),
     SendChatMessage(String),
     ToggleChatPanel,
-    OpenLogDrawer(String), // String is the release ID
+    OpenLogDrawer(String),
     CloseLogDrawer,
     Error(String),
     Info(String),
+    // New message types
+    DismissError,
+    DismissInfo,
+    AutoDismissError,
+    AutoDismissInfo,
+    ToggleAppLog,
 }
 
 pub struct App {
@@ -51,6 +57,11 @@ pub struct App {
     logs: Vec<LogEntry>,
     error: Option<String>,
     info: Option<String>,
+    // New fields for notification animations
+    error_dismissing: bool,
+    info_dismissing: bool,
+    // New field for application log
+    show_app_log: bool,
 }
 
 impl Component for App {
@@ -72,17 +83,90 @@ impl Component for App {
             logs: Vec::new(),
             error: None,
             info: None,
+            // Initialize new fields
+            error_dismissing: false,
+            info_dismissing: false,
+            show_app_log: false,
         };
-        
+
         // Fetch data immediately - no delay
         ctx.link().send_message(AppMsg::FetchReleases);
         ctx.link().send_message(AppMsg::ConnectWebSocket);
-        
+
         app
     }
     
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
+            // Add these handlers to the match statement in the update method
+            AppMsg::DismissError => {
+                self.error_dismissing = true;
+
+                // Set timeout to clear the error after animation completes
+                let link = ctx.link().clone();
+                let callback = Box::new(move || {
+                    link.send_message(AppMsg::AutoDismissError);
+                });
+                gloo_timers::callback::Timeout::new(300, callback).forget();
+
+                true
+            }
+            AppMsg::AutoDismissError => {
+                self.error = None;
+                self.error_dismissing = false;
+                true
+            }
+            AppMsg::DismissInfo => {
+                self.info_dismissing = true;
+
+                // Set timeout to clear the info after animation completes
+                let link = ctx.link().clone();
+                let callback = Box::new(move || {
+                    link.send_message(AppMsg::AutoDismissInfo);
+                });
+                gloo_timers::callback::Timeout::new(300, callback).forget();
+
+                true
+            }
+            AppMsg::AutoDismissInfo => {
+                self.info = None;
+                self.info_dismissing = false;
+                true
+            }
+            AppMsg::ToggleAppLog => {
+                self.show_app_log = !self.show_app_log;
+                if self.show_log_drawer {
+                    self.show_log_drawer = !self.show_log_drawer;
+                }
+                true
+            }
+            // Modify existing Error and Info handlers to auto-dismiss after 5 seconds
+            AppMsg::Error(error) => {
+                self.error = Some(error);
+                self.error_dismissing = false;
+
+                // Set auto-dismiss timeout (5 seconds)
+                let link = ctx.link().clone();
+                let callback = Box::new(move || {
+                    link.send_message(AppMsg::DismissError);
+                });
+                gloo_timers::callback::Timeout::new(5000, callback).forget();
+
+                true
+            }
+            AppMsg::Info(info) => {
+                self.info = Some(info);
+                self.info_dismissing = false;
+
+                // Set auto-dismiss timeout (5 seconds)
+                let link = ctx.link().clone();
+                let callback = Box::new(move || {
+                    link.send_message(AppMsg::DismissInfo);
+                });
+                gloo_timers::callback::Timeout::new(5000, callback).forget();
+
+                true
+            }       
             AppMsg::FetchReleases => {
                 // Fetch releases from API
                 let link = ctx.link().clone();
@@ -389,18 +473,13 @@ impl Component for App {
             AppMsg::OpenLogDrawer(release_id) => {
                 self.show_log_drawer = true;
                 self.active_release_id = release_id;
+                if self.show_app_log {
+                    self.show_app_log = !self.show_app_log;
+                }
                 true
             }
             AppMsg::CloseLogDrawer => {
                 self.show_log_drawer = false;
-                true
-            }
-            AppMsg::Error(error) => {
-                self.error = Some(error);
-                true
-            }
-            AppMsg::Info(info) => {
-                self.info = Some(info);
                 true
             }
         }
@@ -418,13 +497,15 @@ impl Component for App {
         
         html! {
             <div class="app-container">
+                // Replace the existing Header usage in the App's view method:
                 <Header 
                     user={self.current_user.clone()}
                     on_new_release={ctx.link().callback(|_| AppMsg::OpenReleaseForm)}
                     on_toggle_chat={ctx.link().callback(|_| AppMsg::ToggleChatPanel)}
+                    on_toggle_log={ctx.link().callback(|_| AppMsg::ToggleAppLog)} // New callback
                     is_connected={is_connected}
                 />
-                
+
                 <main class="main-content">
                     <KanbanBoard 
                         releases={self.releases.clone()}
@@ -448,18 +529,25 @@ impl Component for App {
                     }
                 </main>
                 
+
                 {
                     // Info notification
                     if let Some(info) = &self.info {
+                        let info_class = if self.info_dismissing {
+                            "info-notification notification-dismissing"
+                        } else {
+                            "info-notification"
+                        };
+
                         html! {
-                            <div class="error-notification">
+                            <div class={info_class}>
                                 <p>{ info }</p>
                                 <button
-                                    onclick={ctx.link().callback(|_| AppMsg::Info(String::new()))}
-                                >
-                                    { "Dismiss" }
-                                </button>
-                            </div>
+                                onclick={ctx.link().callback(|_| AppMsg::DismissInfo)}
+                            >
+                            { "Dismiss" }
+                            </button>
+                                </div>
                         }
                     } else {
                         html! {}
@@ -468,21 +556,46 @@ impl Component for App {
                 {
                     // Error notification
                     if let Some(error) = &self.error {
+                        let error_class = if self.error_dismissing {
+                            "error-notification notification-dismissing"
+                        } else {
+                            "error-notification"
+                        };
+
                         html! {
-                            <div class="error-notification">
+                            <div class={error_class}>
                                 <p>{ error }</p>
                                 <button
-                                    onclick={ctx.link().callback(|_| AppMsg::Error(String::new()))}
-                                >
-                                    { "Dismiss" }
-                                </button>
-                            </div>
+                                onclick={ctx.link().callback(|_| AppMsg::DismissError)}
+                            >
+                            { "Dismiss" }
+                            </button>
+                                </div>
                         }
                     } else {
                         html! {}
                     }
                 }
-                
+
+                // Add this for the app log
+                {
+                    // App log drawer - reusing the existing LogDrawer component
+                    if self.show_app_log {
+                        html! {
+                            <LogDrawer
+                                visible={self.show_app_log}
+                                logs={Rc::new(self.logs.clone())}
+                                release_id={"app".to_string()}
+                                release_title={"Application Log".to_string()}
+                                on_close={ctx.link().callback(|_| AppMsg::ToggleAppLog)}
+                                is_app_log={true}
+                            />
+                        }
+                    } else {
+                        html! {}
+                    }
+                }
+
                 {
                     // Log drawer - only show if a release is selected
                     if self.show_log_drawer && active_release.is_some() {
@@ -494,6 +607,7 @@ impl Component for App {
                                 release_id={self.active_release_id.clone()}
                                 release_title={release.title.clone()}
                                 on_close={ctx.link().callback(|_| AppMsg::CloseLogDrawer)}
+                                is_app_log={false}
                             />
                         }
                     } else {

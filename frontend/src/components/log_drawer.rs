@@ -17,6 +17,7 @@ pub struct LogDrawerProps {
     pub release_id: String,
     pub release_title: String,
     pub on_close: Callback<()>,
+    pub is_app_log: bool,
 }
 
 #[function_component(LogDrawer)]
@@ -83,48 +84,75 @@ pub fn log_drawer(props: &LogDrawerProps) -> Html {
         <div class={drawer_class}>
             <div class="log-drawer-header">
                 <div class="log-drawer-title">
-                    <h3>{ format!("Logs for {}", props.release_title) }</h3>
+                    {
+                        if !props.is_app_log {
+                            html! {
+                                <h3>{ format!("Logs for {}", props.release_title) }</h3>
+                            }
+                        } else {
+                            html! {
+                                <h3>{ format!("Blend Log")}</h3>
+                            }
+                        }
+                    }
                     <button class="close-btn" onclick={on_close}>
                         { "×" }
                     </button>
                 </div>
                 
                 <div class="log-drawer-tabs">
-                    <button 
-                        class={if *active_tab == "all" { "tab-button active" } else { "tab-button" }}
-                        onclick={on_set_tab.reform(|_| "all".to_string())}
-                    >
-                        { "All" }
-                    </button>
-                    <button 
-                        class={if *active_tab == "data" { "tab-button active" } else { "tab-button" }}
-                        onclick={on_set_tab.reform(|_| "data".to_string())}
-                    >
-                        { "Data" }
-                    </button>
-                    <button 
-                        class={if *active_tab == "solr" { "tab-button active" } else { "tab-button" }}
-                        onclick={on_set_tab.reform(|_| "solr".to_string())}
-                    >
-                        { "Solr" }
-                    </button>
-                    <button 
-                        class={if *active_tab == "app" { "tab-button active" } else { "tab-button" }}
-                        onclick={on_set_tab.reform(|_| "app".to_string())}
-                    >
-                        { "App" }
-                    </button>
-                    
-                    <div class="tab-options">
-                        <label class="checkbox-label">
-                            <input 
-                                type="checkbox"
-                                checked={*auto_scroll}
-                                onchange={on_toggle_auto_scroll}
-                            />
-                            { "Auto-scroll" }
-                        </label>
-                    </div>
+                {
+                    if !props.is_app_log {
+                        html! {
+                            <>
+                                <button 
+                                    class={if *active_tab == "all" { "tab-button active" } else { "tab-button" }}
+                                    onclick={on_set_tab.reform(|_| "all".to_string())}
+                                >
+                                    { "All" }
+                                </button>
+                                <button 
+                                    class={if *active_tab == "data" { "tab-button active" } else { "tab-button" }}
+                                    onclick={on_set_tab.reform(|_| "data".to_string())}
+                                >
+                                    { "Data" }
+                                </button>
+                                <button 
+                                    class={if *active_tab == "solr" { "tab-button active" } else { "tab-button" }}
+                                    onclick={on_set_tab.reform(|_| "solr".to_string())}
+                                >
+                                    { "Solr" }
+                                </button>
+                                <button 
+                                    class={if *active_tab == "app" { "tab-button active" } else { "tab-button" }}
+                                    onclick={on_set_tab.reform(|_| "app".to_string())}
+                                >
+                                    { "App" }
+                                </button>
+                                
+                                <div class="tab-options">
+                                    <label class="checkbox-label">
+                                        <input 
+                                            type="checkbox"
+                                            checked={*auto_scroll}
+                                            onchange={on_toggle_auto_scroll}
+                                        />
+                                        { "Auto-scroll" }
+                                    </label>
+                                </div>
+                            </>
+                        }
+                    } else {
+                        html! {
+                            <button 
+                                class={if *active_tab == "all" { "tab-button active" } else { "tab-button" }}
+                                onclick={on_set_tab.reform(|_| "all".to_string())}
+                            >
+                                { "Application Log" }
+                            </button>
+                        }
+                    }
+                }
                 </div>
             </div>
             

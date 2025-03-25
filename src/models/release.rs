@@ -114,6 +114,7 @@ impl Release {
     // Check if this release should be processed by the scheduler
     pub fn should_process(&self) -> bool {
         match self.status {
+
             ReleaseStatus::DeployingToStaging | 
             ReleaseStatus::DeployingToProduction => true,
             _ => false,

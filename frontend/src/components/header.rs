@@ -6,6 +6,7 @@ pub struct HeaderProps {
     pub user: Option<User>,
     pub on_new_release: Callback<()>,
     pub on_toggle_chat: Callback<()>,
+    pub on_toggle_log: Callback<()>, // New property
     pub is_connected: bool,
 }
 
@@ -20,6 +21,14 @@ pub fn header(props: &HeaderProps) -> Html {
     
     let on_toggle_chat = {
         let callback = props.on_toggle_chat.clone();
+        Callback::from(move |_| {
+            callback.emit(());
+        })
+    };
+    
+    // Add handler for the new button
+    let on_toggle_log = {
+        let callback = props.on_toggle_log.clone();
         Callback::from(move |_| {
             callback.emit(());
         })
@@ -54,6 +63,14 @@ pub fn header(props: &HeaderProps) -> Html {
                     onclick={on_toggle_chat}
                 >
                     { "Toggle Chat" }
+                </button>
+                
+                // Add new button
+                <button 
+                    class="toggle-log-btn"
+                    onclick={on_toggle_log}
+                >
+                    { "Blend Log" }
                 </button>
             </div>
             

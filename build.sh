@@ -17,6 +17,7 @@ else
 fi
 
 echo "=== Purging old WASM artifacts ==="
+cp ./frontend/frontend/index.html ./static/index.html
 find ./static/ -type f -not -name index.html -exec rm {} \;
 
 echo "=== Building frontend ==="

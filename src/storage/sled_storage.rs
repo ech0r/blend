@@ -199,6 +199,7 @@ impl SledStorage {
         let mut to_process = Vec::new();
         
         for release in self.get_all_releases()? {
+            info!("-> DB RELEASE SCHEDULED AT: {}", release.scheduled_at);
             if release.should_process() && release.scheduled_at <= now {
                 to_process.push(release);
             }

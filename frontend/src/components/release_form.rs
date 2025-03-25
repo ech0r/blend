@@ -222,6 +222,8 @@ pub fn release_form(props: &ReleaseFormProps) -> Html {
                 Ok(dt) => Utc.from_utc_datetime(&dt),
                 Err(_) => Utc::now(), // Default to now if parsing fails
             };
+
+            //info!("SCHEDULED AT: {}", scheduled_at);
             
             // Create deployment items
             let deployment_items = deployment_items.into_iter()

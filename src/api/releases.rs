@@ -174,6 +174,8 @@ async fn create_release(
         release_data.skip_staging, // Pass the skip_staging flag
     );
 
+    info!("NEW RELEASE SCHEDULED AT: {}", release_data.scheduled_at);
+
     // Save to storage
     match db.save_release(&release) {
         Ok(_) => {

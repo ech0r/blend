@@ -11,6 +11,55 @@
     <style>
         /* Neobrutalist styling for Blend Release Manager */
 
+	/* Info notification (similar to error but with different color) */
+	.info-notification {
+	    position: fixed;
+	    bottom: 2rem;
+	    right: 2rem;
+	    background-color: var(--color-secondary);
+	    color: var(--color-dark);
+	    padding: 1rem;
+	    border: var(--border-thickness) solid var(--color-dark);
+	    box-shadow: var(--shadow-offset) var(--shadow-offset) 0 var(--color-dark);
+	    display: flex;
+	    align-items: center;
+	    justify-content: space-between;
+	    max-width: 400px;
+	    z-index: 1000;
+	    animation: slideIn 0.3s ease-out;
+	}
+
+	.info-notification button {
+	    background: none;
+	    border: none;
+	    color: var(--color-dark);
+	    cursor: pointer;
+	    font-weight: bold;
+	    margin-left: 1rem;
+	    box-shadow: none;
+	}
+
+	.info-notification button:hover {
+	    transform: none;
+	    box-shadow: none;
+	    text-decoration: underline;
+	}
+
+	/* Animation for dismissing notifications */
+	@keyframes slideOut {
+	    from { transform: translateX(0); opacity: 1; }
+	    to { transform: translateX(100%); opacity: 0; }
+	}
+
+	.notification-dismissing {
+	    animation: slideOut 0.3s ease-out forwards;
+	}
+
+	/* Toggle log button */
+	.toggle-log-btn {
+	    background-color: var(--color-tertiary);
+	}
+
         /* Base styles and color variables */
         :root {
             --color-background: #f5f5f5;
