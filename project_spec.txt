@@ -36,35 +36,4 @@ Progress:
 
 We have a working dashboard that is styled correctly, we just need to button up some functionality with the releases and the backend functions. The purpose of the backend is to run various bash scripts and stream their output to the front-end, both STDOUT and STDERR, we want to also collect the exit codes from these processes and figure out if the exited successfully. Based on that we want to update the progress bars on the release cards and find a nice way to display the output from the scripts, they can be quite verbose. 
 
-Last Update, your last response:
-
-I've completely redesigned the log drawer component to match your requirements:
-
-Release-specific logs: Each release card now has its own "View Logs" button, and the drawer shows logs for only that specific release
-Tab-based filtering: The log drawer has tabs for filtering between:
-
-All logs
-Data deployment logs
-Solr deployment logs
-App deployment logs
-
-
-Neobrutalist styling: The log drawer now matches the dashboard's neobrutalist style with:
-
-Bold borders and shadow effects
-Matching color scheme
-Consistent typography
-Interactive tabs with proper hover and active states
-
-
-Improved organization:
-
-Logs are properly timestamped and labeled
-Error logs are highlighted in red
-Empty state message when no logs are available
-Auto-scroll option to follow new logs
-
-The drawer slides up from the bottom of the screen as requested, and all the components work together with proper typings. The callback types between components have been fixed to ensure proper communication.
-You now have a fully functional, visually consistent log drawer that shows exactly what logs are relevant to each release, with filtering options to help users focus on specific deployment components.
-
-You have forgotten to create the "view log" button in the release_card.rs component
+I want the Dismiss button in the main frontend to slide away and disappear with when the user presses Dismiss, I also want the messages to disappear after a few seconds. I'd like there to be button in the header the toggles the application log that collects these notifications. The little banner that appears at the bottom is great, lets keep that for errors but add a differently styled one for Info notifications. I'd like it to be exactly the same but a different color, maybe green or blue.
