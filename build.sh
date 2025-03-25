@@ -16,6 +16,9 @@ else
   echo "Building in DEVELOPMENT mode"
 fi
 
+echo "=== Purging old WASM artifacts ==="
+find ./static/ -type f -not -name index.html -exec rm {} \;
+
 echo "=== Building frontend ==="
 cd frontend
 

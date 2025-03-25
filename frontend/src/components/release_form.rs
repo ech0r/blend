@@ -10,6 +10,7 @@ pub struct ReleaseFormProps {
     pub clients: Vec<Client>,
     pub on_submit: Callback<Release>,
     pub on_cancel: Callback<()>,
+    pub on_create: Callback<String>,
 }
 
 #[function_component(ReleaseForm)]
@@ -110,6 +111,14 @@ pub fn release_form(props: &ReleaseFormProps) -> Html {
     //    })
     //};
 
+    let on_create = {
+        let callback = props.on_create.clone();
+        Callback::from(move |_|{
+            let success = "Release successfully created!".to_owned();
+            callback.emit(success);
+        })
+    };
+
     let get_date = {
         let scheduled_date_ref = scheduled_date_ref.clone();
         let datetime = Local::now();
@@ -152,6 +161,7 @@ pub fn release_form(props: &ReleaseFormProps) -> Html {
         let callback = props.on_submit.clone();
         
         Callback::from(move |e: SubmitEvent| {
+            info!("release submitted");
             e.prevent_default();
             
             // Get form values
@@ -238,19 +248,17 @@ pub fn release_form(props: &ReleaseFormProps) -> Html {
                 progress: 0.0,
                 skip_staging: *skip_staging, // Add the skip_staging flag
             };
-            
+            info!("{:?}", &release);
             callback.emit(release);
         })
     };
-    
+
     let on_cancel = {
         let callback = props.on_cancel.clone();
         Callback::from(move |_| {
             callback.emit(());
         })
     };
-    
-    
     
     html! {
         <div class="release-form">
@@ -409,7 +417,8 @@ pub fn release_form(props: &ReleaseFormProps) -> Html {
                     <button type="button" class="cancel-btn" onclick={on_cancel}>
                         { "Cancel" }
                     </button>
-                    <button type="submit" class="submit-btn">
+                    //<button type="submit" class="submit-btn">
+                    <button class="submit-btn" onclick={on_create}>
                         { "Create Release" }
                     </button>
                 </div>

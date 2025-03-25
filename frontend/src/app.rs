@@ -1,7 +1,7 @@
 use yew::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 use log::{info, error};
-use web_sys::console;
+use web_sys::{console, Event};
 use std::rc::Rc;
 use chrono::Utc;
 
@@ -35,6 +35,7 @@ pub enum AppMsg {
     OpenLogDrawer(String), // String is the release ID
     CloseLogDrawer,
     Error(String),
+    Info(String),
 }
 
 pub struct App {
@@ -49,6 +50,7 @@ pub struct App {
     active_release_id: String,
     logs: Vec<LogEntry>,
     error: Option<String>,
+    info: Option<String>,
 }
 
 impl Component for App {
@@ -69,6 +71,7 @@ impl Component for App {
             active_release_id: String::new(),
             logs: Vec::new(),
             error: None,
+            info: None,
         };
         
         // Fetch data immediately - no delay
@@ -209,6 +212,7 @@ impl Component for App {
                 true
             }
             AppMsg::CreateRelease(release) => {
+                info!("Top level create release");
                 // Create new release through API
                 let link = ctx.link().clone();
                 spawn_local(async move {
@@ -376,7 +380,6 @@ impl Component for App {
                         self.error = Some(format!("Failed to send chat message: {}", e));
                     }
                 }
-                
                 false
             }
             AppMsg::ToggleChatPanel => {
@@ -394,6 +397,10 @@ impl Component for App {
             }
             AppMsg::Error(error) => {
                 self.error = Some(error);
+                true
+            }
+            AppMsg::Info(info) => {
+                self.info = Some(info);
                 true
             }
         }
@@ -442,6 +449,23 @@ impl Component for App {
                 </main>
                 
                 {
+                    // Info notification
+                    if let Some(info) = &self.info {
+                        html! {
+                            <div class="error-notification">
+                                <p>{ info }</p>
+                                <button
+                                    onclick={ctx.link().callback(|_| AppMsg::Info(String::new()))}
+                                >
+                                    { "Dismiss" }
+                                </button>
+                            </div>
+                        }
+                    } else {
+                        html! {}
+                    }
+                }
+                {
                     // Error notification
                     if let Some(error) = &self.error {
                         html! {
@@ -487,6 +511,7 @@ impl Component for App {
                                         clients={self.clients.clone()}
                                         on_submit={ctx.link().callback(AppMsg::CreateRelease)}
                                         on_cancel={ctx.link().callback(|_| AppMsg::CloseReleaseForm)}
+                                        on_create={ctx.link().callback(|s: String| AppMsg::Info(s))}
                                     />
                                 </div>
                             </div>
