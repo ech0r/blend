@@ -36,4 +36,10 @@ PRE-PROMPT (IMPORTANT!):When you make any changes, always provide the complete f
 
 Progress:
 
-The release card progress bar is not indicative of the overall release state, it should be a based on the underlying progress of each release item, data, solr, and app. Also the frontend is marking the release as "ready to test in staging" or "ready to test in production" withouth waiting for the completion of ALL release items (data, solr, and app) It appears when one finishes the status changes.
+We are making good progress, a couple items:
+
+1. the api doesn't seem to be logging as much data to STDOUT anymore, please put that back.
+2. when a release has an error it moves back to Development, I'd like it to just stay in the environment that it is deploying from. 
+3. I'd like there to be a tertiary status between "In Development" and "Deploying to Staging" or "Deploying to Production". I'd like it to be a status like Waiting. 
+Then once execution of the release items starts, it shifts to "Deploying to Staging" or "Deploying to Production".
+4. I'd like the progress bar to reset to zero after a successful release move.
