@@ -32,6 +32,8 @@ Create a software release management tool that meets the following requirements 
 9. Users should be able to create a new release via a form, it takes the following information, (title, client - select populated from client endpoint, current environment, final target environment, deployment items (data, solr, app) - these could be toggles or checkmarks.
 10. Users should have the option to "skip staging" and deploy from "Development to Production". Releases can take the following paths, Development -> Staging -> Production, Development -> Production, Development -> Staging, Staging -> Production.
 
+PRE-PROMPT: Always give me complete files in your responses, no fragmented changes. Give me complete files and the filename.
+
 Progress:
 
 The release card progress bar is not indicative of the overall release state, it should be a based on the underlying progress of each release item, data, solr, and app. Also the frontend is marking the release as "ready to test in staging" or "ready to test in production" withouth waiting for the completion of ALL release items (data, solr, and app) It appears when one finishes the status changes.
