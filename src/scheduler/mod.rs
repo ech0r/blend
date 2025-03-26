@@ -146,23 +146,6 @@ async fn process_release(release_id: uuid::Uuid, db: web::Data<SledStorage>) -> 
         let db_clone = db.clone();
         let env_name = env_name.to_string();
         
-        // Broadcast final status with a clear status name
-        let status_str = match release.status {
-            ReleaseStatus::ReadyToTestInStaging => "ReadyToTestInStaging".to_string(),
-            ReleaseStatus::ReadyToTestInProduction => "ReadyToTestInProduction".to_string(),
-            ReleaseStatus::Error => "Error".to_string(),
-            _ => format!("{:?}", release.status)
-        };
-
-        broadcast_release_update(
-            release.id.to_string(),
-            status_str, 
-            release.progress, 
-            Some(format!("Deployment process complete for {}", release.title))
-        );
-
-        info!("Release process completed for {}: {}", release.id, release.title);
-        
         // Run in a separate task
         let handle = tokio::spawn(async move {
             let result = process_deployment_item(&item_name, &env_name, release_id_str.clone()).await;
@@ -184,10 +167,35 @@ async fn process_release(release_id: uuid::Uuid, db: web::Data<SledStorage>) -> 
                         };
                     }
                     
-                    // Save updated deployment item
+                    // Calculate overall progress based on all items
+                    let total_items = updated_release.deployment_items.len() as f32;
+                    let completed_progress: f32 = updated_release.deployment_items.iter()
+                        .map(|item| {
+                            match item.status {
+                                ReleaseStatus::ReadyToTestInStaging | 
+                                ReleaseStatus::ReadyToTestInProduction => 100.0,
+                                ReleaseStatus::Error => 0.0,
+                                _ => 0.0 // For items still in progress
+                            }
+                        })
+                        .sum::<f32>() / total_items;
+                    
+                    // Update the overall release progress but NOT the status yet
+                    // We'll only update the overall status when all items are done
+                    updated_release.progress = completed_progress;
+                    
+                    // Save updated release with the new progress
                     if let Err(e) = db_ref.save_release(&updated_release) {
                         error!("Failed to save release after deployment item completion: {}", e);
                     }
+                    
+                    // Broadcast progress update (but with InProgress status)
+                    broadcast_release_update(
+                        updated_release.id.to_string(),
+                        "InProgress".to_string(), 
+                        updated_release.progress, 
+                        Some(format!("Item [{}] completed. Updated overall progress to {:.1}%", item_name, updated_release.progress))
+                    );
                 }
             }
             
@@ -204,7 +212,7 @@ async fn process_release(release_id: uuid::Uuid, db: web::Data<SledStorage>) -> 
         }
     }
     
-    // Get the most up-to-date release state after all tasks complete
+    // After all tasks complete, get the most up-to-date release state
     let mut release = match db.get_release(&release_id)? {
         Some(release) => release,
         None => {
@@ -231,7 +239,7 @@ async fn process_release(release_id: uuid::Uuid, db: web::Data<SledStorage>) -> 
     // Check all deployment items for errors
     let has_errors = release.deployment_items.iter().any(|item| matches!(item.status, ReleaseStatus::Error));
 
-    // Update overall status
+    // Update overall status ONLY when all deployment items have completed
     if has_errors {
         info!("Release {} has deployment errors, setting status to Error", release_id);
         release.status = ReleaseStatus::Error;
@@ -273,6 +281,36 @@ async fn process_release(release_id: uuid::Uuid, db: web::Data<SledStorage>) -> 
     );
     info!("Release process completed for {}: {}", release.id, release.title);
     Ok(())
+}
+
+// Utilities to calculate overall progress during deployment
+fn calculate_item_progress(item_name: &str, current_progress: f32, total_items: usize) -> f32 {
+    // Each item contributes equally to the overall progress
+    current_progress / (total_items as f32) 
+}
+
+fn update_release_progress(release: &mut Release) -> f32 {
+    let total_items = release.deployment_items.len();
+    if total_items == 0 {
+        return 0.0;
+    }
+    
+    // Sum the progress from each item
+    let total_progress: f32 = release.deployment_items.iter()
+        .map(|item| {
+            match item.status {
+                ReleaseStatus::ReadyToTestInStaging | 
+                ReleaseStatus::ReadyToTestInProduction | 
+                ReleaseStatus::ClearedInStaging |
+                ReleaseStatus::ClearedInProduction => 100.0,
+                ReleaseStatus::Error => 0.0,
+                _ => 0.0 // For items still in progress
+            }
+        })
+        .sum::<f32>() / (total_items as f32);
+    
+    release.progress = total_progress;
+    total_progress
 }
 
 // Process a single deployment item using the appropriate script
@@ -320,12 +358,12 @@ async fn process_deployment_item(item_name: &str, env_name: &str, release_id: St
                         if let Ok(progress) = progress_str.as_str().parse::<f32>() {
                             current_progress = progress;
                             
-                            // Broadcast progress update
+                            // Broadcast progress update for this specific item
                             broadcast_release_update(
                                 release_id.clone(),
                                 "InProgress".to_string(), 
-                                progress, 
-                                None  // No log line for progress updates
+                                current_progress, 
+                                Some(format!("Item [{}] progress: {:.1}%", item_name, current_progress))
                             );
                         }
                     }
@@ -335,7 +373,7 @@ async fn process_deployment_item(item_name: &str, env_name: &str, release_id: St
                         release_id.clone(),
                         "InProgress".to_string(), 
                         current_progress, 
-                        Some(line)
+                        Some(format!("[{}] {}", item_name, line))
                     );
                 }
                 
@@ -357,7 +395,7 @@ async fn process_deployment_item(item_name: &str, env_name: &str, release_id: St
                 warn!("STDERR: {}", line);
                 
                 // Mark line as coming from stderr and broadcast
-                let err_line = format!("[stderr] {}", line);
+                let err_line = format!("[{}] [stderr] {}", item_name, line);
                 broadcast_release_update(
                     release_id.clone(),
                     "Error".to_string(), 
@@ -388,7 +426,7 @@ async fn process_deployment_item(item_name: &str, env_name: &str, release_id: St
             release_id.clone(),
             "Error".to_string(), 
             0.0, 
-            Some(format!("[ERROR] {} - {}", item_name, error_message))
+            Some(format!("[{}] [ERROR] {}", item_name, error_message))
         );
         
         // Also send a more specific error message to help with debugging
@@ -414,9 +452,9 @@ async fn process_deployment_item(item_name: &str, env_name: &str, release_id: St
 
     broadcast_release_update(
         release_id.clone(),
-        status_str.to_string(), 
-        100.0, 
-        Some(format!("{} deployment to {} completed successfully", item_name, env_name))
+        "ItemComplete".to_string(), // Using a special status to indicate this is just an item completion, not the entire release
+        100.0, // This item is complete
+        Some(format!("Item [{}] deployment to {} completed successfully", item_name, env_name))
     );
     
     Ok(())

@@ -2,6 +2,7 @@ use yew::prelude::*;
 use crate::models::{Release, Environment, ReleaseStatus, User, UserRole};
 use web_sys::{DragEvent, DataTransfer};
 use wasm_bindgen::JsCast;
+use chrono::Local;
 
 #[derive(Properties, PartialEq)]
 pub struct ReleaseCardProps {
@@ -88,6 +89,9 @@ pub fn release_card(props: &ReleaseCardProps) -> Html {
     
     // Check if there are any logs for this release
     let has_logs = true;
+
+    // convert internal Utc time to Local 
+    let scheduled_time = release.scheduled_at.with_timezone(&Local);
     
     html! {
         <div 
@@ -105,7 +109,9 @@ pub fn release_card(props: &ReleaseCardProps) -> Html {
             <div class="release-info">
                 <p class="client-name">{ format!("Client: {}", release.client_id) }</p>
                 <p class="scheduled-time">
-                    { format!("Scheduled: {}", release.scheduled_at.format("%Y-%m-%d %H:%M")) }
+                    { 
+                        format!("Scheduled: {}", scheduled_time.format("%Y-%m-%d %H:%M")) 
+                    }
                 </p>
                 
                 <div class="progress-bar">
@@ -203,6 +209,51 @@ pub fn release_card(props: &ReleaseCardProps) -> Html {
                                                     </span>
                                                 </div>
                                                 
+                                                // Add individual progress indicator
+                                                {
+                                                    if item.status == ReleaseStatus::InDevelopment || 
+                                                        item.status == ReleaseStatus::DeployingToStaging ||
+                                                        item.status == ReleaseStatus::DeployingToProduction {
+                                                        html! {
+                                                            <div class="item-progress">
+                                                                <div class="item-progress-bar">
+                                                                    <div class="item-progress-fill" 
+                                                                        style={
+                                                                            if item.status == ReleaseStatus::InDevelopment { 
+                                                                                "width: 0%" 
+                                                                            } else if matches!(item.status, 
+                                                                                ReleaseStatus::ReadyToTestInStaging | 
+                                                                                ReleaseStatus::ReadyToTestInProduction | 
+                                                                                ReleaseStatus::ClearedInStaging |
+                                                                                ReleaseStatus::ClearedInProduction) {
+                                                                                "width: 100%"
+                                                                            } else {
+                                                                                "width: 50%"  // In progress
+                                                                            }
+                                                                        } />
+                                                                </div>
+                                                                <span class="item-progress-text">
+                                                                    {
+                                                                        if item.status == ReleaseStatus::InDevelopment {
+                                                                            "Not started"
+                                                                        } else if matches!(item.status, 
+                                                                            ReleaseStatus::ReadyToTestInStaging | 
+                                                                            ReleaseStatus::ReadyToTestInProduction | 
+                                                                            ReleaseStatus::ClearedInStaging |
+                                                                            ReleaseStatus::ClearedInProduction) {
+                                                                            "Completed"
+                                                                        } else {
+                                                                            "In progress"
+                                                                        }
+                                                                    }
+                                                                </span>
+                                                            </div>
+                                                        }
+                                                    } else {
+                                                        html! {}
+                                                    }
+                                                }
+                                                
                                                 {
                                                     if !item.logs.is_empty() {
                                                         html! {
@@ -231,7 +282,6 @@ pub fn release_card(props: &ReleaseCardProps) -> Html {
                                         }
                                     }).collect::<Html>()
                                 }
-
                             </ul>
                             
                             <div class="pipeline-info">

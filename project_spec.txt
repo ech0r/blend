@@ -32,7 +32,7 @@ Create a software release management tool that meets the following requirements 
 9. Users should be able to create a new release via a form, it takes the following information, (title, client - select populated from client endpoint, current environment, final target environment, deployment items (data, solr, app) - these could be toggles or checkmarks.
 10. Users should have the option to "skip staging" and deploy from "Development to Production". Releases can take the following paths, Development -> Staging -> Production, Development -> Production, Development -> Staging, Staging -> Production.
 
-PRE-PROMPT: Always give me complete files in your responses, no fragmented changes. Give me complete files and the filename.
+PRE-PROMPT (IMPORTANT!):When you make any changes, always provide the complete file in your response, I need to know the filename and get the complete file, so I can copy/paste safely.
 
 Progress:
 

@@ -91,6 +91,48 @@ impl Release {
             skip_staging,
         }
     }
+
+    // Calculate aggregated progress from deployment items
+    pub fn calculate_progress(&self) -> f32 {
+        if self.deployment_items.is_empty() {
+            return self.progress;
+        }
+
+        let item_count = self.deployment_items.len() as f32;
+        let completed_progress: f32 = self.deployment_items.iter()
+            .map(|item| match item.status {
+                ReleaseStatus::ReadyToTestInStaging | 
+                ReleaseStatus::ReadyToTestInProduction | 
+                ReleaseStatus::ClearedInStaging |
+                ReleaseStatus::ClearedInProduction => 100.0,
+                ReleaseStatus::Error => 0.0,
+                _ => 0.0 // For items still in progress, we'll rely on the individual progress
+            })
+            .sum();
+
+        completed_progress / item_count
+    }
+
+    // Check if all deployment items are completed
+    pub fn all_items_completed(&self) -> bool {
+        if self.deployment_items.is_empty() {
+            return true;
+        }
+
+        self.deployment_items.iter().all(|item| {
+            matches!(item.status, 
+                ReleaseStatus::ReadyToTestInStaging | 
+                ReleaseStatus::ReadyToTestInProduction | 
+                ReleaseStatus::ClearedInStaging |
+                ReleaseStatus::ClearedInProduction |
+                ReleaseStatus::Error)
+        })
+    }
+
+    // Check if any deployment items have errors
+    pub fn has_errors(&self) -> bool {
+        self.deployment_items.iter().any(|item| matches!(item.status, ReleaseStatus::Error))
+    }
     
     // Get the current board column based on status
     pub fn current_board_column(&self) -> Environment {

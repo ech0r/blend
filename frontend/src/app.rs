@@ -340,7 +340,7 @@ impl Component for App {
                                     release.progress = *progress;
                                     
                                     // Update status if it's a status change (not just a progress update)
-                                    if !status.is_empty() && status != "InProgress" {
+                                    if !status.is_empty() && status != "InProgress" && status != "ItemComplete" {
                                         // Try to parse the status string to our enum
                                         let new_status = match status.as_str() {
                                             "InDevelopment" => Some(ReleaseStatus::InDevelopment),
@@ -406,7 +406,42 @@ impl Component for App {
                                         }
                                     }
                                     
-                                    // Add log line if present
+                                    // Process item completion messages
+                                    if status == "ItemComplete" && log_line.is_some() {
+                                        // This is a special status indicating an individual deployment item completed
+                                        // The log line will contain information about which item completed
+                                        let log = log_line.as_ref().unwrap();
+                                        let timestamp = Utc::now().format("%H:%M:%S").to_string();
+                                        
+                                        // Extract item name from the log line if possible
+                                        let item_name = if let Some(start_idx) = log.find('[') {
+                                            if let Some(end_idx) = log.find(']') {
+                                                if start_idx < end_idx {
+                                                    log[start_idx+1..end_idx].trim().to_string()
+                                                } else {
+                                                    "unknown".to_string()
+                                                }
+                                            } else {
+                                                "unknown".to_string()
+                                            }
+                                        } else {
+                                            "unknown".to_string()
+                                        };
+                                        
+                                        // Find the deployment item with this name and update its status
+                                        if let Some(item) = release.deployment_items.iter_mut().find(|i| i.name == item_name) {
+                                            item.logs.push(log.clone());
+                                            
+                                            // Set the item status to completed based on the current environment
+                                            match release.current_environment {
+                                                Environment::Development => item.status = ReleaseStatus::DeployingToStaging,
+                                                Environment::Staging => item.status = ReleaseStatus::ReadyToTestInStaging,
+                                                Environment::Production => item.status = ReleaseStatus::ReadyToTestInProduction,
+                                            }
+                                        }
+                                    }
+                                    
+                                    // Add log line if present (for any status, including progress updates)
                                     if let Some(log) = log_line {
                                         // Create a timestamp
                                         let timestamp = Utc::now().format("%H:%M:%S").to_string();

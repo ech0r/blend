@@ -2,8 +2,29 @@ use yew::prelude::*;
 use web_sys::{HtmlInputElement, HtmlSelectElement};
 use log::{info, debug, error};
 use wasm_bindgen::JsCast;
-use chrono::{Utc, TimeZone, Local, NaiveDateTime};
+use chrono::{Utc, TimeZone, Local, NaiveDateTime, NaiveTime, DateTime, Datelike, Duration, Weekday};
 use crate::models::{Release, Client, Environment, ReleaseStatus, DeploymentItem};
+
+fn get_next_wednesday() -> DateTime<Local> {
+    let now = Utc::now();
+    let days_to_add = match now.weekday() {
+        Weekday::Mon => 3,
+        Weekday::Tue => 2,
+        Weekday::Wed => 1,
+        Weekday::Thu => 7,
+        Weekday::Fri => 6,
+        Weekday::Sat => 5,
+        Weekday::Sun => 4,
+    };
+    let next_thurs = now + Duration::days(days_to_add);
+    let thurs_midnight = Utc.with_ymd_and_hms(
+        next_thurs.year(),
+        next_thurs.month(),
+        next_thurs.day(),
+        0, 0, 0).unwrap();
+    let converted: DateTime<Local> = DateTime::from(thurs_midnight);
+    converted
+}
 
 #[derive(Properties, PartialEq)]
 pub struct ReleaseFormProps {
@@ -28,9 +49,10 @@ pub fn release_form(props: &ReleaseFormProps) -> Html {
     let app_checked = use_state(|| true);
 
     // Release date and time
-    let now = Utc::now();
-    let scheduled_date = use_state(|| now.format("%Y-%m-%d").to_string());
-    let scheduled_time = use_state(|| now.format("%H:%M").to_string());
+    let next_wed_5pm = get_next_wednesday();
+    info!("next_thurs: {}", &next_wed_5pm);
+    let scheduled_date = use_state(|| get_next_wednesday().format("%Y-%m-%d").to_string());
+    let scheduled_time = use_state(|| get_next_wednesday().format("%H:%M").to_string());
     
     // Skip staging option state
     let skip_staging = use_state(|| false);
@@ -140,7 +162,7 @@ pub fn release_form(props: &ReleaseFormProps) -> Html {
             if let Some(time_input) = scheduled_time_ref.cast::<HtmlInputElement>() {
                 time_input.set_value(&hours_minutes.to_string())
             }
-            info!("Now: {}", now);
+            //info!("Now: {}", now);
         })
     };
 
