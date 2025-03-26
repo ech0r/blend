@@ -32,14 +32,12 @@ Create a software release management tool that meets the following requirements 
 9. Users should be able to create a new release via a form, it takes the following information, (title, client - select populated from client endpoint, current environment, final target environment, deployment items (data, solr, app) - these could be toggles or checkmarks.
 10. Users should have the option to "skip staging" and deploy from "Development to Production". Releases can take the following paths, Development -> Staging -> Production, Development -> Production, Development -> Staging, Staging -> Production.
 
-PRE-PROMPT (IMPORTANT!):When you make any changes, always provide the complete file in your response, I need to know the filename and get the complete file, so I can copy/paste safely.
+PRE-PROMPT (IMPORTANT!):When you make any changes, always provide the complete file in your response, I need to know the filename and get the complete file, so I can copy/paste safely. Always give me complete files in every response.
 
 Progress:
 
 We are making good progress, a couple items:
 
-1. the api doesn't seem to be logging as much data to STDOUT anymore, please put that back.
-2. when a release has an error it moves back to Development, I'd like it to just stay in the environment that it is deploying from. 
-3. I'd like there to be a tertiary status between "In Development" and "Deploying to Staging" or "Deploying to Production". I'd like it to be a status like Waiting. 
-Then once execution of the release items starts, it shifts to "Deploying to Staging" or "Deploying to Production".
-4. I'd like the progress bar to reset to zero after a successful release move.
+1. The deployment items will still show "deploying to staging" even if the release is "ready to test in staging", they need to be consistent.
+2. I need a confirmation tooltip or modal when deleting a release to confirm deletion.
+3. I'd like a button for each of the deployment items in the deployment items section to "re-run" that deployment item, and I'd like the deployment item box to animate and reflect the progress of that specific item, even when re-run.
