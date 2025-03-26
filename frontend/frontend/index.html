@@ -10,6 +10,246 @@
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         /* Neobrutalist styling for Blend Release Manager */
+
+	/* Release error summary styling */
+	.release-error-summary {
+	    background-color: #ffeeee;
+	    border: 2px solid #e74c3c;
+	    border-radius: 4px;
+	    padding: 1rem;
+	    margin-bottom: 1rem;
+	    position: relative;
+	    overflow: hidden;
+	}
+
+	.release-error-summary h4 {
+	    color: #e74c3c;
+	    margin-top: 0;
+	    margin-bottom: 0.5rem;
+	}
+
+	.release-error-summary::before {
+	    content: "";
+	    position: absolute;
+	    top: 0;
+	    left: 0;
+	    width: 100%;
+	    height: 100%;
+	    background: linear-gradient(90deg, 
+		rgba(231, 76, 60, 0) 0%, 
+		rgba(231, 76, 60, 0.1) 50%, 
+		rgba(231, 76, 60, 0) 100%);
+	    animation: error-pulse 2s infinite;
+	    pointer-events: none;
+	}
+
+	@keyframes error-pulse {
+	    0% { transform: translateX(-100%); }
+	    100% { transform: translateX(100%); }
+	}
+
+	/* Deployment item styling improvements */
+	.deployment-item {
+	    padding: 0.75rem;
+	    margin-bottom: 0.75rem;
+	    border: 2px solid var(--color-dark);
+	    display: flex;
+	    flex-direction: column;
+	    transition: all 0.2s ease-in-out;
+	}
+
+	.deployment-item .item-header {
+	    display: flex;
+	    justify-content: space-between;
+	    align-items: center;
+	    margin-bottom: 0.5rem;
+	}
+
+	.deployment-item .item-name {
+	    font-weight: bold;
+	}
+
+	.deployment-item .item-status {
+	    padding: 0.2rem 0.5rem;
+	    border-radius: 3px;
+	    font-size: 0.8rem;
+	    background-color: #f0f0f0;
+	}
+
+	.deployment-item .item-status-error {
+	    background-color: #e74c3c;
+	    color: white;
+	    font-weight: bold;
+	}
+
+	/* Error details styling */
+	.deployment-item .error {
+	    margin-top: 0.5rem;
+	    padding: 0.5rem;
+	    background-color: #fff0f0;
+	    border: 1px solid #ffcccc;
+	    border-left: 4px solid #e74c3c;
+	    color: #900;
+	    font-size: 0.9rem;
+	    white-space: pre-wrap;
+	    word-break: break-word;
+	}
+
+	.deployment-item .error h5 {
+	    margin-top: 0;
+	    margin-bottom: 0.3rem;
+	    color: #e74c3c;
+	}
+
+	/* Enhance status display for error states */
+	.release-status span.status-error {
+	    background-color: #e74c3c;
+	    color: white;
+	    position: relative;
+	    overflow: hidden;
+	}
+
+	.release-status span.status-error::after {
+	    content: "";
+	    position: absolute;
+	    top: 0;
+	    left: 0;
+	    width: 100%;
+	    height: 100%;
+	    background: linear-gradient(90deg, 
+		rgba(255, 255, 255, 0) 0%, 
+		rgba(255, 255, 255, 0.2) 50%, 
+		rgba(255, 255, 255, 0) 100%);
+	    animation: error-flash 1.5s infinite;
+	    pointer-events: none;
+	}
+
+	@keyframes error-flash {
+	    0% { transform: translateX(-100%); }
+	    100% { transform: translateX(100%); }
+	}
+	/* Deploying state animations and styling */
+	.release-card.status-deploying {
+	    border-left: 8px solid #f39c12;
+	    position: relative;
+	    overflow: hidden;
+	}
+
+	.release-card.status-deploying::before {
+	    content: "";
+	    position: absolute;
+	    top: 0;
+	    left: 0;
+	    width: 100%;
+	    height: 100%;
+	    background: linear-gradient(90deg, 
+		rgba(243, 156, 18, 0) 0%, 
+		rgba(243, 156, 18, 0.1) 50%, 
+		rgba(243, 156, 18, 0) 100%);
+	    animation: deploy-pulse 2s infinite;
+	    pointer-events: none;
+	}
+
+	@keyframes deploy-pulse {
+	    0% { transform: translateX(-100%); }
+	    100% { transform: translateX(100%); }
+	}
+
+	/* Status indicator animations */
+	.release-status span {
+	    display: inline-block;
+	    padding: 0.25rem 0.5rem;
+	    font-size: 0.8rem;
+	    font-weight: bold;
+	    background-color: #f0f0f0;
+	    border: 2px solid var(--color-dark);
+	    position: relative;
+	    overflow: hidden;
+	}
+
+	/* Deploying to Staging status */
+	.release-status span.status-deploying-to-staging {
+	    background-color: #3498db;
+	    color: white;
+	    animation: status-pulse 1.5s infinite;
+	}
+
+	/* Deploying to Production status */
+	.release-status span.status-deploying-to-production {
+	    background-color: #e67e22;
+	    color: white;
+	    animation: status-pulse 1.5s infinite;
+	}
+
+	/* Pulsing animation for deployment statuses */
+	@keyframes status-pulse {
+	    0% { opacity: 0.7; }
+	    50% { opacity: 1; }
+	    100% { opacity: 0.7; }
+	}
+
+	/* Enhance existing status colors */
+	.release-card.status-in-development {
+	    border-left: 8px solid #3498db;
+	}
+
+	.release-card.status-cleared {
+	    border-left: 8px solid #27ae60;
+	}
+
+	.release-card.status-ready {
+	    border-left: 8px solid #16a085;
+	}
+
+	.release-card.status-completed {
+	    border-left: 8px solid #2ecc71;
+	}
+
+	/* Error and blocked statuses */
+	.release-card.status-error {
+	    border-left: 8px solid #e74c3c;
+	    animation: error-flash 2s 1;
+	}
+
+	.release-card.status-blocked {
+	    border-left: 8px solid #7f8c8d;
+	}
+
+	@keyframes error-flash {
+	    0% { box-shadow: 0 0 0 rgba(231, 76, 60, 0); }
+	    50% { box-shadow: 0 0 20px rgba(231, 76, 60, 0.5); }
+	    100% { box-shadow: 0 0 0 rgba(231, 76, 60, 0); }
+	}
+
+	/* Progress bar animations */
+	.release-card.status-deploying .progress-fill {
+	    background: repeating-linear-gradient(
+		45deg,
+		var(--color-primary),
+		var(--color-primary) 10px,
+		#e74c3c 10px,
+		#e74c3c 20px
+	    );
+	    animation: progress-stripe 20s linear infinite;
+	}
+
+	@keyframes progress-stripe {
+	    0% { background-position: 0 0; }
+	    100% { background-position: 100% 0; }
+	}
+
+	/* For deploying to production, use a different color scheme */
+	.release-card.status-deploying-to-production .progress-fill {
+	    background: repeating-linear-gradient(
+		45deg,
+		#e67e22,
+		#e67e22 10px,
+		#d35400 10px,
+		#d35400 20px
+	    );
+	    animation: progress-stripe 15s linear infinite;
+	}
+
 	/* User info styling with role badge */
 	.user-info {
 	    display: flex;

@@ -51,10 +51,10 @@ impl ReleaseStatus {
         match self {
             ReleaseStatus::InDevelopment => "status-in-development",
             ReleaseStatus::ClearedInDevelopment => "status-cleared",
-            ReleaseStatus::DeployingToStaging => "status-deploying",
+            ReleaseStatus::DeployingToStaging => "status-deploying status-deploying-to-staging",
             ReleaseStatus::ReadyToTestInStaging => "status-ready",
             ReleaseStatus::ClearedInStaging => "status-cleared",
-            ReleaseStatus::DeployingToProduction => "status-deploying",
+            ReleaseStatus::DeployingToProduction => "status-deploying status-deploying-to-production",
             ReleaseStatus::ReadyToTestInProduction => "status-ready",
             ReleaseStatus::ClearedInProduction => "status-completed",
             ReleaseStatus::Error => "status-error",
@@ -132,7 +132,20 @@ impl Release {
     
     // Helper to determine which column this release belongs in
     pub fn current_board_column(&self) -> Environment {
-        self.status.environment()
+        match self.status {
+            // Deploying states stay in their source environment
+            ReleaseStatus::DeployingToStaging => Environment::Development,
+            ReleaseStatus::DeployingToProduction => {
+                // If skipping staging, would be in Development, otherwise in Staging
+                if self.current_environment == Environment::Development && self.skip_staging {
+                    Environment::Development
+                } else {
+                    Environment::Staging
+                }
+            },
+            // All other states follow the normal environment mapping
+            _ => self.status.environment()
+        }
     }
 }
 

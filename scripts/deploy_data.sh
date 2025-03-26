@@ -62,7 +62,7 @@ log "Transforming legacy data formats..."
 sleep 2
 
 # Randomly fail sometimes in staging to demonstrate error handling
-if [[ "$ENV" == "staging" && $((RANDOM % 10)) -eq 0 ]]; then
+if [[ "$ENV" == "staging" && $((RANDOM % 50)) -eq 0 ]]; then
     log "ERROR: Failed to transform data in column 'legacy_field' - Data type mismatch"
     exit 1
 fi

@@ -61,7 +61,7 @@ if [[ "$ENV" == "production" ]]; then
     sleep 3
     
     # Randomly fail in production with a 10% chance to demonstrate error handling
-    if [[ $((RANDOM % 10)) -eq 0 ]]; then
+    if [[ $((RANDOM % 50)) -eq 0 ]]; then
         log "ERROR: Solr connection timeout during indexing"
         exit 1
     fi

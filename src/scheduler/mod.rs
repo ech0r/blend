@@ -146,12 +146,12 @@ async fn process_release(release_id: uuid::Uuid, db: web::Data<SledStorage>) -> 
         let db_clone = db.clone();
         let env_name = env_name.to_string();
         
-        // Broadcast final status
+        // Broadcast final status with a clear status name
         let status_str = match release.status {
-            ReleaseStatus::ReadyToTestInStaging => "ReadyToTestInStaging".to_owned(),
-            ReleaseStatus::ReadyToTestInProduction => "ReadyToTestInProduction".to_owned(),
-            ReleaseStatus::Error => "Error".to_owned(),
-            _ => format!("{:?}", release.status),
+            ReleaseStatus::ReadyToTestInStaging => "ReadyToTestInStaging".to_string(),
+            ReleaseStatus::ReadyToTestInProduction => "ReadyToTestInProduction".to_string(),
+            ReleaseStatus::Error => "Error".to_string(),
+            _ => format!("{:?}", release.status)
         };
 
         broadcast_release_update(
@@ -160,6 +160,8 @@ async fn process_release(release_id: uuid::Uuid, db: web::Data<SledStorage>) -> 
             release.progress, 
             Some(format!("Deployment process complete for {}", release.title))
         );
+
+        info!("Release process completed for {}: {}", release.id, release.title);
         
         // Run in a separate task
         let handle = tokio::spawn(async move {
@@ -202,7 +204,7 @@ async fn process_release(release_id: uuid::Uuid, db: web::Data<SledStorage>) -> 
         }
     }
     
-    // Get the most up-to-date release state
+    // Get the most up-to-date release state after all tasks complete
     let mut release = match db.get_release(&release_id)? {
         Some(release) => release,
         None => {
@@ -210,12 +212,28 @@ async fn process_release(release_id: uuid::Uuid, db: web::Data<SledStorage>) -> 
             return Err("Release not found after deployment".into());
         }
     };
-    
+
+    // Check if all deployment items have completed
+    let all_completed = release.deployment_items.iter().all(|item| {
+        match item.status {
+            ReleaseStatus::ReadyToTestInStaging | 
+            ReleaseStatus::ReadyToTestInProduction | 
+            ReleaseStatus::Error => true,
+            _ => false
+        }
+    });
+
+    if !all_completed {
+        info!("Not all deployment items for release {} have completed yet, waiting...", release_id);
+        return Ok(());
+    }
+
     // Check all deployment items for errors
     let has_errors = release.deployment_items.iter().any(|item| matches!(item.status, ReleaseStatus::Error));
-    
+
     // Update overall status
     if has_errors {
+        info!("Release {} has deployment errors, setting status to Error", release_id);
         release.status = ReleaseStatus::Error;
         release.progress = 0.0;
     } else {
@@ -226,21 +244,34 @@ async fn process_release(release_id: uuid::Uuid, db: web::Data<SledStorage>) -> 
             _ => release.status.clone(),
         };
         release.progress = 100.0;
+        info!("All deployment items for release {} completed successfully, status set to {:?}", 
+               release_id, release.status);
     }
-    
+
     // Save final status
     db.save_release(&release)?;
-    
+
     // Broadcast final status
+    let status_str = match release.status {
+        ReleaseStatus::ReadyToTestInStaging => "ReadyToTestInStaging".to_string(),
+        ReleaseStatus::ReadyToTestInProduction => "ReadyToTestInProduction".to_string(),
+        ReleaseStatus::Error => "Error".to_string(),
+        _ => format!("{:?}", release.status)
+    };
+
+    let completion_message = if has_errors {
+        format!("Deployment failed for {}. Check details for more information.", release.title)
+    } else {
+        format!("Deployment process complete for {}", release.title)
+    };
+
     broadcast_release_update(
         release.id.to_string(),
-        format!("{:?}", release.status), 
+        status_str, 
         release.progress, 
-        Some(format!("Deployment process complete for {}", release.title))
+        Some(completion_message)
     );
-    
     info!("Release process completed for {}: {}", release.id, release.title);
-    
     Ok(())
 }
 
@@ -340,25 +371,40 @@ async fn process_deployment_item(item_name: &str, env_name: &str, release_id: St
         });
     }
     
-    // Wait for process to complete
+    // After getting the output status:
     let status = child.wait().await
         .map_err(|e| format!("Failed to wait for {} process: {}", item_name, e))?;
         
     if !status.success() {
+        let exit_code = status.code().unwrap_or(-1);
         let error_message = format!("{} deployment failed with exit code: {}", 
-            item_name, 
-            status.code().unwrap_or(-1));
+            item_name, exit_code);
             
+        // Log the error
+        error!("{}", error_message);
+        
+        // Send detailed error information
         broadcast_release_update(
             release_id.clone(),
             "Error".to_string(), 
             0.0, 
-            Some(error_message.clone())
+            Some(format!("[ERROR] {} - {}", item_name, error_message))
+        );
+        
+        // Also send a more specific error message to help with debugging
+        let detailed_error = format!("Item [{}] failed. Exit code: {}. Check logs for details.", 
+            item_name, exit_code);
+        
+        broadcast_release_update(
+            release_id.clone(),
+            "Error".to_string(), 
+            0.0, 
+            Some(detailed_error)
         );
         
         return Err(error_message.into());
     }
-    
+
     // Announce completion with the correct status for the frontend to understand
     let status_str = match env_name {
         "staging" => "ReadyToTestInStaging",

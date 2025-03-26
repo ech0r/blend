@@ -178,16 +178,30 @@ pub fn release_card(props: &ReleaseCardProps) -> Html {
                         <div class="release-details">
                             <h4>{ "Deployment Items" }</h4>
                             <ul class="deployment-items">
+                                {                        
+                                    // If entire release has error status, show a summary at the top
+                                    if matches!(release.status, ReleaseStatus::Error) {
+                                        html! {
+                                            <div class="release-error-summary">
+                                                <h4>{"⚠️ Deployment Error"}</h4>
+                                                <p>{"This release encountered errors during deployment. See details for each item below."}</p>
+                                            </div>
+                                        }
+                                    } else {
+                                        html! {}
+                                    }
+                                }
                                 {
                                     release.deployment_items.iter().map(|item| {
                                         let item_status_class = item.status.css_class();
-                                        
                                         html! {
                                             <li class={classes!("deployment-item", item_status_class)}>
-                                                <span class="item-name">{ &item.name }</span>
-                                                <span class="item-status">
-                                                    { item.status.display_name() }
-                                                </span>
+                                                <div class="item-header">
+                                                    <span class="item-name">{ &item.name }</span>
+                                                    <span class={classes!("item-status", if item.status == ReleaseStatus::Error { "item-status-error" } else { "" })}>
+                                                        { item.status.display_name() }
+                                                    </span>
+                                                </div>
                                                 
                                                 {
                                                     if !item.logs.is_empty() {
@@ -205,7 +219,8 @@ pub fn release_card(props: &ReleaseCardProps) -> Html {
                                                     if let Some(error) = &item.error {
                                                         html! {
                                                             <div class="error">
-                                                                <p>{ format!("Error: {}", error) }</p>
+                                                                <h5>{"Error Details:"}</h5>
+                                                                <p>{ error }</p>
                                                             </div>
                                                         }
                                                     } else {
@@ -216,6 +231,7 @@ pub fn release_card(props: &ReleaseCardProps) -> Html {
                                         }
                                     }).collect::<Html>()
                                 }
+
                             </ul>
                             
                             <div class="pipeline-info">

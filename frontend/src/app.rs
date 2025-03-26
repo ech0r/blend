@@ -339,6 +339,73 @@ impl Component for App {
                                     // Update progress
                                     release.progress = *progress;
                                     
+                                    // Update status if it's a status change (not just a progress update)
+                                    if !status.is_empty() && status != "InProgress" {
+                                        // Try to parse the status string to our enum
+                                        let new_status = match status.as_str() {
+                                            "InDevelopment" => Some(ReleaseStatus::InDevelopment),
+                                            "ClearedInDevelopment" => Some(ReleaseStatus::ClearedInDevelopment),
+                                            "DeployingToStaging" => Some(ReleaseStatus::DeployingToStaging),
+                                            "ReadyToTestInStaging" => Some(ReleaseStatus::ReadyToTestInStaging),
+                                            "ClearedInStaging" => Some(ReleaseStatus::ClearedInStaging),
+                                            "DeployingToProduction" => Some(ReleaseStatus::DeployingToProduction),
+                                            "ReadyToTestInProduction" => Some(ReleaseStatus::ReadyToTestInProduction),
+                                            "ClearedInProduction" => Some(ReleaseStatus::ClearedInProduction),
+                                            "Error" => Some(ReleaseStatus::Error),
+                                            "Blocked" => Some(ReleaseStatus::Blocked),
+                                            _ => None,
+                                        };
+                                        
+                                        if let Some(new_status) = new_status {
+                                            // Only update if it's different to avoid unnecessary re-renders
+                                            if release.status != new_status {
+                                                info!("Updating release {} status from {:?} to {:?}", 
+                                                      release_id, release.status, new_status);
+                                                
+                                                // Set the new status
+                                                release.status = new_status.clone();
+                                                
+                                                // Add a notification for important status changes
+                                                match new_status {
+                                                    ReleaseStatus::ReadyToTestInStaging => {
+                                                        self.info = Some(format!("Release '{}' is ready for testing in Staging", release.title));
+                                                        self.info_dismissing = false;
+                                                        
+                                                        // Auto-dismiss after 5 seconds
+                                                        let link = ctx.link().clone();
+                                                        let callback = Box::new(move || {
+                                                            link.send_message(AppMsg::DismissInfo);
+                                                        });
+                                                        gloo_timers::callback::Timeout::new(5000, callback).forget();
+                                                    },
+                                                    ReleaseStatus::ReadyToTestInProduction => {
+                                                        self.info = Some(format!("Release '{}' is ready for testing in Production", release.title));
+                                                        self.info_dismissing = false;
+                                                        
+                                                        // Auto-dismiss after 5 seconds
+                                                        let link = ctx.link().clone();
+                                                        let callback = Box::new(move || {
+                                                            link.send_message(AppMsg::DismissInfo);
+                                                        });
+                                                        gloo_timers::callback::Timeout::new(5000, callback).forget();
+                                                    },
+                                                    ReleaseStatus::Error => {
+                                                        self.error = Some(format!("Release '{}' encountered an error during deployment", release.title));
+                                                        self.error_dismissing = false;
+                                                        
+                                                        // Auto-dismiss after 8 seconds
+                                                        let link = ctx.link().clone();
+                                                        let callback = Box::new(move || {
+                                                            link.send_message(AppMsg::DismissError);
+                                                        });
+                                                        gloo_timers::callback::Timeout::new(8000, callback).forget();
+                                                    },
+                                                    _ => {}
+                                                }
+                                            }
+                                        }
+                                    }
+                                    
                                     // Add log line if present
                                     if let Some(log) = log_line {
                                         // Create a timestamp
@@ -368,7 +435,7 @@ impl Component for App {
                                         // Create a new log entry
                                         let log_entry = LogEntry {
                                             release_id: release_id.clone(),
-                                            item_name: item_name.clone(), // Clone here to avoid the moved value issue
+                                            item_name: item_name.clone(),
                                             content: log_line.clone(),
                                             timestamp,
                                             is_error,

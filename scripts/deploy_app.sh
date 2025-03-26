@@ -57,7 +57,7 @@ log "Running automated tests..."
 sleep 2
 
 # Randomly fail the tests in development with a 15% chance
-if [[ "$ENV" == "development" && $((RANDOM % 100)) -lt 15 ]]; then
+if [[ "$ENV" == "development" && $((RANDOM % 100)) -lt 50 ]]; then
     log "ERROR: Test failure in user authentication module"
     log "ERROR: Expected status code 200 but got 403"
     exit 1
@@ -93,7 +93,7 @@ if [[ "$ENV" == "production" ]]; then
     sleep 1
     
     # Randomly fail in production with a 5% chance to demonstrate error handling
-    if [[ $((RANDOM % 100)) -lt 5 ]]; then
+    if [[ $((RANDOM % 100)) -lt 50 ]]; then
         log "ERROR: Production verification failed - External payment API not responding"
         exit 1
     fi
