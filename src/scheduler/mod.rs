@@ -12,6 +12,7 @@ use chrono::Utc;
 
 // Import WebSocket broadcast functionality
 use crate::websocket::server::broadcast_release_update;
+use crate::websocket::server::broadcast_app_log;
 
 const CHECK_INTERVAL: Duration = Duration::from_secs(60); // Check every minute
 
@@ -37,14 +38,18 @@ pub fn start_scheduler(db: web::Data<SledStorage>) -> tokio::task::JoinHandle<()
             interval.tick().await;
             
             info!("Checking for releases to process...");
+            broadcast_app_log("info", "Scheduler checking for releases to process");
+            
             match check_releases_to_process(db.clone()).await {
                 Ok(count) => {
                     if count > 0 {
                         info!("Processed {} releases", count);
+                        broadcast_app_log("info", &format!("Scheduler processing {} releases", count));
                     }
                 }
                 Err(e) => {
                     error!("Error checking releases to process: {}", e);
+                    broadcast_app_log("error", &format!("Scheduler error: {}", e));
                 }
             }
             
@@ -53,10 +58,12 @@ pub fn start_scheduler(db: web::Data<SledStorage>) -> tokio::task::JoinHandle<()
                 Ok(count) => {
                     if count > 0 {
                         info!("Pruned {} stale WebSocket connections", count);
+                        broadcast_app_log("info", &format!("Pruned {} stale WebSocket connections", count));
                     }
                 }
                 Err(e) => {
                     error!("Error pruning stale WebSocket connections: {}", e);
+                    broadcast_app_log("error", &format!("Error pruning WebSocket connections: {}", e));
                 }
             }
         }
@@ -87,6 +94,7 @@ async fn check_releases_to_process(db: web::Data<SledStorage>) -> Result<usize, 
         tokio::spawn(async move {
             if let Err(e) = process_release(release_id, db_clone).await {
                 error!("Error processing release {}: {}", release_id, e);
+                broadcast_app_log("error", &format!("Error processing release {}: {}", release_id, e));
             }
         });
     }
@@ -109,17 +117,42 @@ async fn process_release(release_id: uuid::Uuid, db: web::Data<SledStorage>) -> 
     
     // Determine current environment from the release status
     let env_name = match release.status {
+        ReleaseStatus::WaitingForStaging |
         ReleaseStatus::DeployingToStaging => "staging",
+        
+        ReleaseStatus::WaitingForProduction |
+        ReleaseStatus::WaitingForProductionFromStaging |
         ReleaseStatus::DeployingToProduction => "production",
+        
         _ => {
             error!("Release {} has invalid status for processing: {:?}", release_id, release.status);
             return Err(format!("Invalid status for processing: {:?}", release.status).into());
         }
     };
     
-    // Update progress
+    // Reset progress to 0 when starting the deployment
     release.progress = 0.0;
+    
+    // Update the status to the appropriate "Deploying" status if it's in a waiting state
+    release.status = match release.status {
+        ReleaseStatus::WaitingForStaging => ReleaseStatus::DeployingToStaging,
+        ReleaseStatus::WaitingForProduction |
+        ReleaseStatus::WaitingForProductionFromStaging => ReleaseStatus::DeployingToProduction,
+        _ => release.status, // Keep current status if it's already deploying
+    };
+    
+    // Update all deployment items to the same status as the release
+    for item in release.deployment_items.iter_mut() {
+        item.status = release.status.clone();
+    }
+    
+    // Save the updated release
     db.save_release(&release)?;
+    
+    // Add more detailed logging
+    info!("STARTING DEPLOYMENT: Release {} - {} is being deployed to {}", 
+          release_id, release.title, env_name);
+    broadcast_app_log("info", &format!("Starting deployment: {} to {}", release.title, env_name));
     
     // Broadcast status update
     broadcast_release_update(
@@ -131,13 +164,6 @@ async fn process_release(release_id: uuid::Uuid, db: web::Data<SledStorage>) -> 
     
     // Process each deployment item in parallel
     let mut handles = vec![];
-    
-    // First save the release status for all items 
-    for item in release.deployment_items.iter_mut() {
-        // Set all items to the same status as the release
-        item.status = release.status.clone();
-    }
-    db.save_release(&release)?;
     
     // Then process each item
     for item in release.deployment_items.iter() {
@@ -254,6 +280,13 @@ async fn process_release(release_id: uuid::Uuid, db: web::Data<SledStorage>) -> 
         release.progress = 100.0;
         info!("All deployment items for release {} completed successfully, status set to {:?}", 
                release_id, release.status);
+               
+        // Update all deployment items to match the release status unless they're in error state
+        for item in release.deployment_items.iter_mut() {
+            if item.status != ReleaseStatus::Error {
+                item.status = release.status.clone();
+            }
+        }
     }
 
     // Save final status
@@ -279,6 +312,14 @@ async fn process_release(release_id: uuid::Uuid, db: web::Data<SledStorage>) -> 
         release.progress, 
         Some(completion_message)
     );
+    
+    // Add app log for deployment completion
+    if has_errors {
+        broadcast_app_log("error", &format!("Deployment failed: {}", release.title));
+    } else {
+        broadcast_app_log("info", &format!("Deployment completed successfully: {}", release.title));
+    }
+    
     info!("Release process completed for {}: {}", release.id, release.title);
     Ok(())
 }

@@ -14,11 +14,14 @@ pub enum ReleaseStatus {
     // Development phase
     InDevelopment,
     ClearedInDevelopment,
+    WaitingForStaging,      // New status - waiting to be deployed to staging
+    WaitingForProduction,   // New status - waiting to be deployed to production directly
     
     // Staging phase
     DeployingToStaging,
     ReadyToTestInStaging,
     ClearedInStaging,
+    WaitingForProductionFromStaging, // New status - waiting to be deployed to production from staging
     
     // Production phase
     DeployingToProduction,
@@ -137,26 +140,36 @@ impl Release {
     // Get the current board column based on status
     pub fn current_board_column(&self) -> Environment {
         match self.status {
-            ReleaseStatus::InDevelopment | 
-            ReleaseStatus::ClearedInDevelopment => Environment::Development,
+            // Development phase statuses
+            ReleaseStatus::InDevelopment |
+            ReleaseStatus::ClearedInDevelopment |
+            ReleaseStatus::WaitingForStaging |
+            ReleaseStatus::WaitingForProduction => Environment::Development,
             
+            // Staging phase statuses
             ReleaseStatus::DeployingToStaging | 
             ReleaseStatus::ReadyToTestInStaging | 
-            ReleaseStatus::ClearedInStaging => Environment::Staging,
+            ReleaseStatus::ClearedInStaging |
+            ReleaseStatus::WaitingForProductionFromStaging => Environment::Staging,
             
+            // Production phase statuses
             ReleaseStatus::DeployingToProduction | 
             ReleaseStatus::ReadyToTestInProduction | 
             ReleaseStatus::ClearedInProduction => Environment::Production,
             
-            ReleaseStatus::Error | 
-            ReleaseStatus::Blocked => self.current_environment.clone(), // Add clone() here
+            // Error and blocked states - stay in current environment
+            ReleaseStatus::Error |
+            ReleaseStatus::Blocked => self.current_environment.clone(),
         }
     }
     
     // Check if this release should be processed by the scheduler
     pub fn should_process(&self) -> bool {
         match self.status {
-
+            // Now include the waiting statuses as ones that should be processed
+            ReleaseStatus::WaitingForStaging |
+            ReleaseStatus::WaitingForProduction |
+            ReleaseStatus::WaitingForProductionFromStaging |
             ReleaseStatus::DeployingToStaging | 
             ReleaseStatus::DeployingToProduction => true,
             _ => false,
@@ -166,8 +179,13 @@ impl Release {
     // Get next status after deployment completes successfully
     pub fn next_status_after_deployment(&self) -> ReleaseStatus {
         match self.status {
+            ReleaseStatus::WaitingForStaging |
             ReleaseStatus::DeployingToStaging => ReleaseStatus::ReadyToTestInStaging,
+            
+            ReleaseStatus::WaitingForProduction |
+            ReleaseStatus::WaitingForProductionFromStaging |
             ReleaseStatus::DeployingToProduction => ReleaseStatus::ReadyToTestInProduction,
+            
             _ => self.status.clone(), // No change for other statuses
         }
     }
@@ -190,15 +208,21 @@ impl Release {
     // Get the next status when cleared
     pub fn next_status_when_cleared(&self) -> Option<ReleaseStatus> {
         match self.status {
+            // When clearing from Development, go to appropriate Waiting status
             ReleaseStatus::InDevelopment => {
                 if self.skip_staging {
-                    Some(ReleaseStatus::DeployingToProduction)
+                    Some(ReleaseStatus::WaitingForProduction)
                 } else {
-                    Some(ReleaseStatus::DeployingToStaging)
+                    Some(ReleaseStatus::WaitingForStaging)
                 }
             },
-            ReleaseStatus::ReadyToTestInStaging => Some(ReleaseStatus::DeployingToProduction),
+            
+            // When clearing from Staging, go to Waiting status for Production
+            ReleaseStatus::ReadyToTestInStaging => Some(ReleaseStatus::WaitingForProductionFromStaging),
+            
+            // Production completion remains the same
             ReleaseStatus::ReadyToTestInProduction => Some(ReleaseStatus::ClearedInProduction),
+            
             _ => None, // No next status for other states
         }
     }

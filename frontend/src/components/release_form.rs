@@ -50,7 +50,7 @@ pub fn release_form(props: &ReleaseFormProps) -> Html {
 
     // Release date and time
     let next_wed_5pm = get_next_wednesday();
-    info!("next_thurs: {}", &next_wed_5pm);
+    info!("next_wed_5pm: {}", &next_wed_5pm);
     let scheduled_date = use_state(|| get_next_wednesday().format("%Y-%m-%d").to_string());
     let scheduled_time = use_state(|| get_next_wednesday().format("%H:%M").to_string());
     

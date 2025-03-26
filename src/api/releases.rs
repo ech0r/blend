@@ -259,7 +259,7 @@ async fn update_release(
         // Keep original values for these fields
         created_at: existing_release.created_at,
         created_by: existing_release.created_by,
-        status: existing_release.status, // Keep the current status
+        status: existing_release.status.clone(), // Keep the current status
         progress: existing_release.progress, // Keep the current progress
         skip_staging: release_data.skip_staging, // Update the skip_staging flag
         // Update deployment items if provided, otherwise keep original
@@ -269,7 +269,7 @@ async fn update_release(
             release_data.deployment_items.iter().map(|name| {
                 DeploymentItem {
                     name: name.clone(),
-                    status: ReleaseStatus::InDevelopment, // Reset status for new items
+                    status: existing_release.status.clone(), // Set item status to match release status
                     logs: Vec::new(),
                     error: None,
                 }
@@ -343,7 +343,7 @@ async fn delete_release(db: web::Data<SledStorage>, path: web::Path<Uuid>) -> im
     }
 }
 
-// Add this endpoint to update release status
+// Update release status
 #[put("/{id}/status")]
 async fn update_release_status(
     db: web::Data<SledStorage>,
@@ -385,10 +385,18 @@ async fn update_release_status(
     };
     
     // Get the next status based on current and skip_staging flag
+    let old_status = release.status.clone();
+    
     if status_str == "clear" {
-        // Use release.next_status_when_cleared() instead of calling it on the status
+        // Use release.next_status_when_cleared() to get the next status
         if let Some(next_status) = release.next_status_when_cleared() {
             release.status = next_status;
+            // Reset progress to 0 when moving to a new state
+            release.progress = 0.0;
+            
+            // Add more detailed logging
+            info!("Release {} status cleared. Moving to {:?} with progress reset to 0%", 
+                  release_id, release.status);
         } else {
             return HttpResponse::BadRequest().json(ReleaseResponse {
                 success: false,
@@ -401,9 +409,12 @@ async fn update_release_status(
         release.status = match status_str {
             "InDevelopment" => ReleaseStatus::InDevelopment,
             "ClearedInDevelopment" => ReleaseStatus::ClearedInDevelopment,
+            "WaitingForStaging" => ReleaseStatus::WaitingForStaging,
+            "WaitingForProduction" => ReleaseStatus::WaitingForProduction,
             "DeployingToStaging" => ReleaseStatus::DeployingToStaging,
             "ReadyToTestInStaging" => ReleaseStatus::ReadyToTestInStaging,
             "ClearedInStaging" => ReleaseStatus::ClearedInStaging,
+            "WaitingForProductionFromStaging" => ReleaseStatus::WaitingForProductionFromStaging,
             "DeployingToProduction" => ReleaseStatus::DeployingToProduction,
             "ReadyToTestInProduction" => ReleaseStatus::ReadyToTestInProduction,
             "ClearedInProduction" => ReleaseStatus::ClearedInProduction,
@@ -417,6 +428,16 @@ async fn update_release_status(
                 });
             }
         };
+    }
+    
+    // If the status changed, update all deployment items to match
+    if old_status != release.status {
+        for item in release.deployment_items.iter_mut() {
+            // Keep error status for any items that have errors
+            if item.status != ReleaseStatus::Error {
+                item.status = release.status.clone();
+            }
+        }
     }
 
     // Save the updated release

@@ -13,11 +13,14 @@ pub enum ReleaseStatus {
     // Development phase
     InDevelopment,
     ClearedInDevelopment,
+    WaitingForStaging,      // New status - waiting to be deployed to staging
+    WaitingForProduction,   // New status - waiting to be deployed to production directly
     
     // Staging phase
     DeployingToStaging,
     ReadyToTestInStaging,
     ClearedInStaging,
+    WaitingForProductionFromStaging, // New status - waiting to be deployed to production from staging
     
     // Production phase
     DeployingToProduction,
@@ -35,9 +38,12 @@ impl ReleaseStatus {
         match self {
             ReleaseStatus::InDevelopment => "In Development",
             ReleaseStatus::ClearedInDevelopment => "Cleared for Staging",
+            ReleaseStatus::WaitingForStaging => "Waiting for Staging",
+            ReleaseStatus::WaitingForProduction => "Waiting for Production",
             ReleaseStatus::DeployingToStaging => "Deploying to Staging",
             ReleaseStatus::ReadyToTestInStaging => "Ready to Test in Staging",
             ReleaseStatus::ClearedInStaging => "Cleared for Production",
+            ReleaseStatus::WaitingForProductionFromStaging => "Waiting for Production",
             ReleaseStatus::DeployingToProduction => "Deploying to Production",
             ReleaseStatus::ReadyToTestInProduction => "Ready to Test in Production",
             ReleaseStatus::ClearedInProduction => "Completed",
@@ -51,9 +57,12 @@ impl ReleaseStatus {
         match self {
             ReleaseStatus::InDevelopment => "status-in-development",
             ReleaseStatus::ClearedInDevelopment => "status-cleared",
+            ReleaseStatus::WaitingForStaging => "status-waiting",
+            ReleaseStatus::WaitingForProduction => "status-waiting",
             ReleaseStatus::DeployingToStaging => "status-deploying status-deploying-to-staging",
             ReleaseStatus::ReadyToTestInStaging => "status-ready",
             ReleaseStatus::ClearedInStaging => "status-cleared",
+            ReleaseStatus::WaitingForProductionFromStaging => "status-waiting",
             ReleaseStatus::DeployingToProduction => "status-deploying status-deploying-to-production",
             ReleaseStatus::ReadyToTestInProduction => "status-ready",
             ReleaseStatus::ClearedInProduction => "status-completed",
@@ -65,9 +74,15 @@ impl ReleaseStatus {
     // Helper to determine the current environment of a release based on its status
     pub fn environment(&self) -> Environment {
         match self {
-            ReleaseStatus::InDevelopment | ReleaseStatus::ClearedInDevelopment => Environment::Development,
-            ReleaseStatus::DeployingToStaging | ReleaseStatus::ReadyToTestInStaging | ReleaseStatus::ClearedInStaging => Environment::Staging,
-            ReleaseStatus::DeployingToProduction | ReleaseStatus::ReadyToTestInProduction | ReleaseStatus::ClearedInProduction => Environment::Production,
+            ReleaseStatus::InDevelopment | ReleaseStatus::ClearedInDevelopment |
+            ReleaseStatus::WaitingForStaging | ReleaseStatus::WaitingForProduction => Environment::Development,
+            
+            ReleaseStatus::DeployingToStaging | ReleaseStatus::ReadyToTestInStaging | 
+            ReleaseStatus::ClearedInStaging | ReleaseStatus::WaitingForProductionFromStaging => Environment::Staging,
+            
+            ReleaseStatus::DeployingToProduction | ReleaseStatus::ReadyToTestInProduction | 
+            ReleaseStatus::ClearedInProduction => Environment::Production,
+            
             ReleaseStatus::Error | ReleaseStatus::Blocked => Environment::Development, // Default to Development for error states
         }
     }
@@ -77,12 +92,12 @@ impl ReleaseStatus {
         match self {
             ReleaseStatus::InDevelopment => {
                 if skip_staging {
-                    Some(ReleaseStatus::DeployingToProduction)
+                    Some(ReleaseStatus::WaitingForProduction)
                 } else {
-                    Some(ReleaseStatus::DeployingToStaging)
+                    Some(ReleaseStatus::WaitingForStaging)
                 }
             },
-            ReleaseStatus::ReadyToTestInStaging => Some(ReleaseStatus::DeployingToProduction),
+            ReleaseStatus::ReadyToTestInStaging => Some(ReleaseStatus::WaitingForProductionFromStaging),
             ReleaseStatus::ReadyToTestInProduction => Some(ReleaseStatus::ClearedInProduction),
             _ => None, // No next status for other states
         }
@@ -204,5 +219,10 @@ pub enum WsMessage {
         status: String,
         progress: f32,
         log_line: Option<String>,
+    },
+    AppLog {
+        level: String,      // "info", "warn", "error"
+        message: String,
+        timestamp: String,
     },
 }

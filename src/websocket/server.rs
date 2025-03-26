@@ -41,6 +41,11 @@ pub enum WsMessage {
         progress: f32,
         log_line: Option<String>,
     },
+    AppLog {
+        level: String,      // "info", "warn", "error"
+        message: String,
+        timestamp: String,
+    },
 }
 
 // Message struct for actor communication
@@ -174,6 +179,9 @@ impl Actor for WebSocketSession {
         if let Ok(json) = serde_json::to_string(&welcome_msg) {
             ctx.text(json);
         }
+        
+        // Also send an app log message that a new client connected
+        broadcast_app_log("info", &format!("New client connected with ID: {}", self.id));
     }
     
     fn stopping(&mut self, _: &mut Self::Context) -> Running {
@@ -187,6 +195,9 @@ impl Actor for WebSocketSession {
             sessions.remove(&self.id);
             info!("Removed session {} from active sessions. Total active: {}", self.id, sessions.len());
         }
+        
+        // Send app log about client disconnection
+        broadcast_app_log("info", &format!("Client disconnected: {}", self.id));
         
         info!("WebSocket connection stopped: {}", self.id);
         Running::Stop
@@ -247,6 +258,10 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebSocketSession 
                         // Clients shouldn't send release updates
                         warn!("Client {} tried to send a release update", self.id);
                     }
+                    Ok(WsMessage::AppLog { .. }) => {
+                        // Clients shouldn't send app logs
+                        warn!("Client {} tried to send an app log", self.id);
+                    }
                     Err(e) => {
                         // Invalid message format
                         error!("Invalid message format from {}: {}", self.id, e);
@@ -295,17 +310,15 @@ pub fn broadcast_release_update(release_id: String, status: String, progress: f3
     
     // Convert to JSON
     if let Ok(json) = serde_json::to_string(&update) {
-        // Only log detailed messages if it's an error or significant event (not every progress update)
-        if is_error || log_line.is_some() && !status.contains("Progress") {
-            info!("Broadcasting release update: {} - status: {}, progress: {:.1}%", 
-                release_id, status, progress);
-            
-            if let Some(line) = &log_line {
-                if is_error {
-                    error!("Release error: {}", line);
-                } else {
-                    info!("Release log: {}", line);
-                }
+        // Always log significant status changes or errors
+        info!("BROADCASTING: Release {} - Status: {} - Progress: {:.1}%", 
+            release_id, status, progress);
+        
+        if let Some(line) = &log_line {
+            if is_error {
+                error!("RELEASE ERROR: {} - {}", release_id, line);
+            } else {
+                info!("RELEASE LOG: {} - {}", release_id, line);
             }
         }
         
@@ -332,5 +345,47 @@ pub fn broadcast_release_update(release_id: String, status: String, progress: f3
         }
     } else {
         error!("Failed to serialize release update");
+    }
+}
+
+// Function to broadcast application logs to all connected clients
+pub fn broadcast_app_log(level: &str, message: &str) {
+    let timestamp = Utc::now().to_rfc3339();
+    
+    // Create app log message
+    let app_log = WsMessage::AppLog {
+        level: level.to_string(),
+        message: message.to_string(),
+        timestamp,
+    };
+    
+    // Always log to console as well
+    match level {
+        "error" => error!("APP LOG: {}", message),
+        "warn" => warn!("APP LOG: {}", message),
+        _ => info!("APP LOG: {}", message),
+    }
+    
+    // Broadcast to all clients
+    if let Ok(json) = serde_json::to_string(&app_log) {
+        if let Ok(sessions) = ACTIVE_SESSIONS.lock() {
+            if sessions.is_empty() {
+                return;
+            }
+            
+            let mut broadcast_count = 0;
+            for (_, addr) in sessions.iter() {
+                let msg = BroadcastMessage {
+                    content: json.clone(),
+                    sender_id: "system".to_string(),
+                };
+                addr.do_send(msg);
+                broadcast_count += 1;
+            }
+            
+            debug!("App log broadcast to {} clients", broadcast_count);
+        }
+    } else {
+        error!("Failed to serialize app log");
     }
 }

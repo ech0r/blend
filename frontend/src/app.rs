@@ -345,9 +345,12 @@ impl Component for App {
                                         let new_status = match status.as_str() {
                                             "InDevelopment" => Some(ReleaseStatus::InDevelopment),
                                             "ClearedInDevelopment" => Some(ReleaseStatus::ClearedInDevelopment),
+                                            "WaitingForStaging" => Some(ReleaseStatus::WaitingForStaging),
+                                            "WaitingForProduction" => Some(ReleaseStatus::WaitingForProduction),
                                             "DeployingToStaging" => Some(ReleaseStatus::DeployingToStaging),
                                             "ReadyToTestInStaging" => Some(ReleaseStatus::ReadyToTestInStaging),
                                             "ClearedInStaging" => Some(ReleaseStatus::ClearedInStaging),
+                                            "WaitingForProductionFromStaging" => Some(ReleaseStatus::WaitingForProductionFromStaging),
                                             "DeployingToProduction" => Some(ReleaseStatus::DeployingToProduction),
                                             "ReadyToTestInProduction" => Some(ReleaseStatus::ReadyToTestInProduction),
                                             "ClearedInProduction" => Some(ReleaseStatus::ClearedInProduction),
@@ -490,6 +493,25 @@ impl Component for App {
                                             }
                                         }
                                     }
+                                }
+                            }
+                            WsMessage::AppLog { level, message, timestamp } => {
+                                // Create a new log entry for app logs
+                                let is_error = level == "error";
+                                let log_entry = LogEntry {
+                                    release_id: "app".to_string(),  // Special ID for app logs
+                                    item_name: "system".to_string(),
+                                    content: message.clone(),
+                                    timestamp: timestamp.clone(),
+                                    is_error,
+                                };
+                                
+                                // Add to global logs
+                                self.logs.push(log_entry);
+                                
+                                // Show error notification for error level logs
+                                if is_error {
+                                    ctx.link().send_message(AppMsg::Error(message.clone()));
                                 }
                             }
                         }
