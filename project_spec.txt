@@ -34,4 +34,4 @@ Create a software release management tool that meets the following requirements 
 
 Progress:
 
-We are looking good so far, right now it appears the role based user management portion is not working correctly, ech0r is still being logged in as a viewer, despite being an admin in the .users file. Please fix.
+The release card progress bar is not indicative of the overall release state, it should be a based on the underlying progress of each release item, data, solr, and app. Also the frontend is marking the release as "ready to test in staging" or "ready to test in production" withouth waiting for the completion of ALL release items (data, solr, and app) It appears when one finishes the status changes.
