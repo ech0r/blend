@@ -18,6 +18,7 @@ pub struct ReleaseCardProps {
 pub fn release_card(props: &ReleaseCardProps) -> Html {
     let release = &props.release;
     let show_details = use_state(|| false);
+    let confirm_delete = use_state(|| false);
     
     // Determine permissions based on user role
     let can_deploy_to_staging = props.current_user.as_ref()
@@ -51,8 +52,20 @@ pub fn release_card(props: &ReleaseCardProps) -> Html {
     let on_delete = {
         let id = release.id.clone();
         let callback = props.on_delete.clone();
+        let confirm_delete = confirm_delete.clone();
         Callback::from(move |_| {
-            callback.emit(id.clone());
+            if *confirm_delete {
+                callback.emit(id.clone());
+            } else {
+                confirm_delete.set(true);
+            }
+        })
+    };
+    
+    let on_cancel_delete = {
+        let confirm_delete = confirm_delete.clone();
+        Callback::from(move |_| {
+            confirm_delete.set(false);
         })
     };
     
@@ -165,12 +178,22 @@ pub fn release_card(props: &ReleaseCardProps) -> Html {
                 }
                 
                 {
-                    // Delete button - only for admins
+                    // Delete button with confirmation - only for admins
                     if can_delete {
-                        html! {
-                            <button class="delete-btn" onclick={on_delete}>
-                                { "Delete" }
-                            </button>
+                        if *confirm_delete {
+                            html! {
+                                <div class="delete-confirmation">
+                                    <span>{"Are you sure?"}</span>
+                                    <button class="confirm-btn" onclick={on_delete.clone()}>{ "Yes" }</button>
+                                    <button class="cancel-btn" onclick={on_cancel_delete}>{ "No" }</button>
+                                </div>
+                            }
+                        } else {
+                            html! {
+                                <button class="delete-btn" onclick={on_delete}>
+                                    { "Delete" }
+                                </button>
+                            }
                         }
                     } else {
                         html! {}
@@ -200,6 +223,22 @@ pub fn release_card(props: &ReleaseCardProps) -> Html {
                                 {
                                     release.deployment_items.iter().map(|item| {
                                         let item_status_class = item.status.css_class();
+                                        
+                                        // Create rerun callback
+                                        let on_rerun_item = {
+                                            let release_id = release.id.clone();
+                                            let item_name = item.name.clone();
+                                            Callback::from(move |_| {
+                                                // TODO: Add API call to rerun this specific item
+                                                let release_id = release_id.clone();
+                                                let item_name = item_name.clone();
+                                                log::info!("Rerunning item {} for release {}", item_name, release_id);
+                                                
+                                                // This would be replaced with an actual API call later
+                                                // on_rerun_item.emit((release_id, item_name));
+                                            })
+                                        };
+                                        
                                         html! {
                                             <li class={classes!("deployment-item", item_status_class)}>
                                                 <div class="item-header">
@@ -273,6 +312,19 @@ pub fn release_card(props: &ReleaseCardProps) -> Html {
                                                                 <h5>{"Error Details:"}</h5>
                                                                 <p>{ error }</p>
                                                             </div>
+                                                        }
+                                                    } else {
+                                                        html! {}
+                                                    }
+                                                }
+                                                
+                                                // Add re-run button
+                                                {
+                                                    if (can_deploy_to_staging || can_deploy_to_production) {
+                                                        html! {
+                                                            <button class="rerun-item-btn" onclick={on_rerun_item}>
+                                                                { "RE-RUN" }
+                                                            </button>
                                                         }
                                                     } else {
                                                         html! {}

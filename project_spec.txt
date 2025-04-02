@@ -34,10 +34,6 @@ Create a software release management tool that meets the following requirements 
 
 PRE-PROMPT (IMPORTANT!):When you make any changes, always provide the complete file in your response, I need to know the filename and get the complete file, so I can copy/paste safely. Always give me complete files in every response.
 
-Progress:
+Current issues:
 
-We are making good progress, a couple items:
-
-1. The deployment items will still show "deploying to staging" even if the release is "ready to test in staging", they need to be consistent.
-2. I need a confirmation tooltip or modal when deleting a release to confirm deletion.
-3. I'd like a button for each of the deployment items in the deployment items section to "re-run" that deployment item, and I'd like the deployment item box to animate and reflect the progress of that specific item, even when re-run.
+I want the Deployment Items in the "show details" section to accurately reflect both the item's percent completion, as well as the status. I also want the "re-run" to actually trigger a re-run of the associated script, I'd like that to happen immediately if pressed.

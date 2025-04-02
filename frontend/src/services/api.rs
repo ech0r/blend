@@ -64,6 +64,28 @@ impl std::fmt::Display for ApiError {
 pub struct ApiClient;
 
 impl ApiClient {
+    pub async fn rerun_deployment_item(
+        release_id: &str,
+        item_name: &str,
+    ) -> Result<Release, ApiError> {
+        let url = format!("{}/releases/{}/rerun/{}", API_URL, release_id, item_name);
+        
+        let response = Request::post(&url)
+            .send()
+            .await?;
+            
+        if !response.ok() {
+            return Err(ApiError::ApiError(format!("API error: {}", response.status())));
+        }
+        
+        let response: ApiResponse<Release> = response.json().await?;
+        
+        match response.data {
+            Some(release) => Ok(release),
+            None => Err(ApiError::ApiError(response.message.unwrap_or_else(|| 
+                "Unknown error rerunning deployment item".to_string()))),
+        }
+    }
     // Fetch all releases
     pub async fn get_releases() -> Result<Vec<Release>, ApiError> {
         let url = format!("{}/releases", API_URL);

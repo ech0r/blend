@@ -41,6 +41,8 @@ pub enum AppMsg {
     AutoDismissError,
     AutoDismissInfo,
     ToggleAppLog,
+    RerunDeploymentItem(String, String), // release_id, item_name
+    DeploymentItemRerun(Release),                                         
 }
 
 pub struct App {
@@ -94,6 +96,26 @@ impl Component for App {
     
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
+            AppMsg::RerunDeploymentItem(release_id, item_name) => {
+                // Call API to rerun the deployment item
+                let link = ctx.link().clone();
+                spawn_local(async move {
+                    match ApiClient::rerun_deployment_item(&release_id, &item_name).await {
+                        Ok(updated) => link.send_message(AppMsg::DeploymentItemRerun(updated)),
+                        Err(e) => link.send_message(AppMsg::Error(format!("Failed to rerun deployment item: {}", e))),
+                    }
+                });
+
+                false
+            }
+
+            AppMsg::DeploymentItemRerun(updated_release) => {
+                // Find and update the release in the list
+                if let Some(index) = self.releases.iter().position(|r| r.id == updated_release.id) {
+                    self.releases[index] = updated_release;
+                }
+                true
+            }
             AppMsg::DismissError => {
                 self.error_dismissing = true;
 

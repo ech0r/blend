@@ -11,6 +11,104 @@
     <style>
         /* Neobrutalist styling for Blend Release Manager */
 
+	/* Delete confirmation styling */
+	.delete-confirmation {
+	    display: flex;
+	    align-items: center;
+	    gap: 0.5rem;
+	    margin-left: auto;
+	}
+
+	.delete-confirmation span {
+	    font-weight: bold;
+	    color: #e74c3c;
+	}
+
+	.delete-confirmation .confirm-btn {
+	    background-color: #e74c3c;
+	    color: white;
+	    padding: 0.25rem 0.5rem;
+	    font-size: 0.8rem;
+	}
+
+	.delete-confirmation .cancel-btn {
+	    background-color: #7f8c8d;
+	    color: white;
+	    padding: 0.25rem 0.5rem;
+	    font-size: 0.8rem;
+	}
+
+	/* Rerun button styling */
+	.rerun-item-btn {
+	    margin-top: 0.5rem;
+	    width: 100%;
+	    background-color: #3498db;
+	    color: white;
+	    border: 2px solid var(--color-dark);
+	    padding: 0.5rem 1rem;
+	    font-weight: bold;
+	    font-size: 0.9rem;
+	    cursor: pointer;
+	    transition: all 0.2s ease;
+	    box-shadow: 3px 3px 0 var(--color-dark);
+	}
+
+	.rerun-item-btn:hover {
+	    transform: translate(-2px, -2px);
+	    box-shadow: 5px 5px 0 var(--color-dark);
+	}
+
+	.rerun-item-btn:active {
+	    transform: translate(0, 0);
+	    box-shadow: 0 0 0 var(--color-dark);
+	}
+
+	/* Item progress styling */
+	.item-progress {
+	    margin: 0.5rem 0;
+	}
+
+	.item-progress-bar {
+	    height: 1rem;
+	    background-color: #f0f0f0;
+	    border: 1px solid var(--color-dark);
+	    margin: 0.5rem 0;
+	    overflow: hidden;
+	    position: relative;
+	}
+
+	.item-progress-fill {
+	    height: 100%;
+	    background-color: var(--color-secondary);
+	    position: absolute;
+	    left: 0;
+	    top: 0;
+	    transition: width 0.4s ease-out;
+	}
+
+	.item-progress-text {
+	    position: absolute;
+	    right: 5px;
+	    top: 50%;
+	    transform: translateY(-50%);
+	    font-size: 0.7rem;
+	    font-weight: bold;
+	    color: var(--color-dark);
+	    z-index: 1;
+	}
+
+	/* Animation for re-running items */
+	@keyframes progress-pulse {
+	    0% { opacity: 0.6; }
+	    50% { opacity: 1; }
+	    100% { opacity: 0.6; }
+	}
+
+	.deployment-item.rerunning .item-progress-fill {
+	    background-color: var(--color-tertiary);
+	    animation: progress-pulse 1.5s infinite;
+	}
+
 	/* Release error summary styling */
 	.release-error-summary {
 	    background-color: #ffeeee;

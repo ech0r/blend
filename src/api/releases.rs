@@ -433,7 +433,7 @@ async fn update_release_status(
     // If the status changed, update all deployment items to match
     if old_status != release.status {
         for item in release.deployment_items.iter_mut() {
-            // Keep error status for any items that have errors
+            // Only update non-error items to match the release status
             if item.status != ReleaseStatus::Error {
                 item.status = release.status.clone();
             }
@@ -461,11 +461,86 @@ async fn update_release_status(
     }
 }
 
+#[post("/{id}/rerun/{item_name}")]
+async fn rerun_deployment_item(
+    db: web::Data<SledStorage>,
+    path: web::Path<(Uuid, String)>,
+) -> impl Responder {
+    let (release_id, item_name) = path.into_inner();
+    
+    // Get the release
+    let mut release = match db.get_release(&release_id) {
+        Ok(Some(release)) => release,
+        Ok(None) => {
+            return HttpResponse::NotFound().json(ReleaseResponse {
+                success: false,
+                message: Some(format!("Release with ID {} not found", release_id)),
+                data: None,
+            });
+        }
+        Err(e) => {
+            error!("Failed to get release {}: {}", release_id, e);
+            return HttpResponse::InternalServerError().json(ReleaseResponse {
+                success: false,
+                message: Some(format!("Failed to get release: {}", e)),
+                data: None,
+            });
+        }
+    };
+    
+    // Find the deployment item
+    let item_index = match release.deployment_items.iter().position(|item| item.name == item_name) {
+        Some(index) => index,
+        None => {
+            return HttpResponse::NotFound().json(ReleaseResponse {
+                success: false,
+                message: Some(format!("Deployment item {} not found", item_name)),
+                data: None,
+            });
+        }
+    };
+    
+    // Reset status to deploying based on current environment
+    let new_status = match release.current_environment {
+        Environment::Development => ReleaseStatus::DeployingToStaging,
+        Environment::Staging => ReleaseStatus::DeployingToProduction,
+        Environment::Production => ReleaseStatus::DeployingToProduction,
+    };
+    
+    // Update item status and clear logs
+    let item = &mut release.deployment_items[item_index];
+    item.status = new_status;
+    item.logs = Vec::new();
+    item.error = None;
+    
+    // Save the updated release
+    match db.save_release(&release) {
+        Ok(_) => {
+            info!("Rerunning deployment item {} for release {}", item_name, release_id);
+            
+            HttpResponse::Ok().json(ReleaseResponse {
+                success: true,
+                message: Some(format!("Deployment item {} rerunning", item_name)),
+                data: Some(release),
+            })
+        }
+        Err(e) => {
+            error!("Failed to save release after rerunning item: {}", e);
+            HttpResponse::InternalServerError().json(ReleaseResponse {
+                success: false,
+                message: Some(format!("Failed to save release: {}", e)),
+                data: None,
+            })
+        }
+    }
+}
+
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(get_releases)
         .service(get_release)
         .service(create_release)
         .service(update_release)
         .service(delete_release)
-        .service(update_release_status);
+        .service(update_release_status)
+        .service(rerun_deployment_item);
 }
